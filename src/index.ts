@@ -29,6 +29,8 @@ const getNavElements = (): NavElements | null => {
 };
 
 const NAV_OPEN_CLASS = 'is-nav-open';
+const NAV_LINKS_VISIBLE_CLASS = 'are-nav-links-visible';
+const LINKS_FADE_DURATION = 320;
 
 const initNavInteractions = () => {
   const elements = getNavElements();
@@ -45,6 +47,7 @@ const initNavInteractions = () => {
     isLockedOpen: false,
     hoverEnabled: hoverMediaQuery.matches,
   };
+  let hideLinksTimeout: number | null = null;
 
   const reflectIcons = () => {
     openIcon.toggleAttribute('aria-hidden', state.isOpen);
@@ -60,16 +63,50 @@ const initNavInteractions = () => {
     reflectIcons();
   };
 
+  const nextFrame = (callback: () => void) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(callback);
+    });
+  };
+
+  const showLinks = () => {
+    if (hideLinksTimeout !== null) {
+      window.clearTimeout(hideLinksTimeout);
+      hideLinksTimeout = null;
+    }
+
+    wrapper.classList.add(NAV_LINKS_VISIBLE_CLASS);
+  };
+
+  const scheduleHideLinks = () => {
+    if (hideLinksTimeout !== null) {
+      window.clearTimeout(hideLinksTimeout);
+    }
+
+    hideLinksTimeout = window.setTimeout(() => {
+      if (state.isOpen) {
+        return;
+      }
+
+      wrapper.classList.remove(NAV_LINKS_VISIBLE_CLASS);
+    }, LINKS_FADE_DURATION);
+  };
+
   const openNav = (lockOpen: boolean) => {
-    state.isOpen = true;
-    state.isLockedOpen = lockOpen ? true : state.isLockedOpen;
-    applyState();
+    showLinks();
+
+    nextFrame(() => {
+      state.isOpen = true;
+      state.isLockedOpen = lockOpen ? true : state.isLockedOpen;
+      applyState();
+    });
   };
 
   const closeNav = () => {
     state.isOpen = false;
     state.isLockedOpen = false;
     applyState();
+    scheduleHideLinks();
   };
 
   const toggleNav = () => {

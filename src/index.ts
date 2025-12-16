@@ -292,6 +292,11 @@ class LoopSliderInstance {
   private readonly config = LOOP_SLIDER_CONFIG;
   private slides: SlideState[] = [];
   private viewportHeight = window.innerHeight || 0;
+  private listElement: HTMLElement | null = null;
+  private wrapperContainer: HTMLElement | null = null;
+  private loopHeight = 0;
+  private loopOffset = 0;
+  private previousScroll: number | null = null;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -306,6 +311,9 @@ class LoopSliderInstance {
     }
 
     this.ensureLoopFiller(list);
+    this.listElement = list;
+    this.wrapperContainer = list.parentElement;
+    this.loopHeight = list.scrollHeight;
     this.collectSlides();
   }
 
@@ -344,6 +352,29 @@ class LoopSliderInstance {
     });
   }
 
+  private adjustLoopOffset() {
+    if (!lenisInstance || !this.wrapperContainer || !this.loopHeight) {
+      return;
+    }
+
+    const scroll = lenisInstance.scroll;
+    const limit = Math.max(lenisInstance.limit || 0, 1);
+
+    if (this.previousScroll !== null) {
+      const nearTop = this.previousScroll < limit * 0.2 && scroll > limit * 0.8;
+      const nearBottom = this.previousScroll > limit * 0.8 && scroll < limit * 0.2;
+
+      if (nearBottom) {
+        this.loopOffset -= this.loopHeight;
+      } else if (nearTop) {
+        this.loopOffset += this.loopHeight;
+      }
+    }
+
+    this.previousScroll = scroll;
+    this.wrapperContainer.style.transform = `translate3d(0, ${this.loopOffset}px, 0)`;
+  }
+
   public measure() {
     if (!this.slides.length) {
       return;
@@ -351,6 +382,7 @@ class LoopSliderInstance {
 
     const viewportHeight = Math.max(window.innerHeight, 1);
     this.viewportHeight = viewportHeight;
+    this.adjustLoopOffset();
     const viewportTop = 0;
     const viewportBottom = viewportHeight;
 

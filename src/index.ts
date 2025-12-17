@@ -199,7 +199,7 @@ type SlideState = {
   node: HTMLElement;
   contentNode: HTMLElement;
   blurNode: HTMLElement | null;
-  mediaNode: HTMLElement | null;
+  focusNodes: HTMLElement[];
   progress: number;
   targetProgress: number;
   scale: number;
@@ -346,7 +346,26 @@ class LoopSliderInstance {
       contentNode:
         queryElementWithFallback<HTMLElement>(node, LOOP_SLIDER_SELECTORS.content) ?? node,
       blurNode: queryElementWithFallback<HTMLElement>(node, LOOP_SLIDER_SELECTORS.blur),
-      mediaNode: queryElementWithFallback<HTMLElement>(node, LOOP_SLIDER_SELECTORS.media),
+      focusNodes: (() => {
+        const focusTargets: HTMLElement[] = [];
+        const primaryFocus = queryElementWithFallback<HTMLElement>(
+          node,
+          LOOP_SLIDER_SELECTORS.media
+        );
+        const titleNode = node.querySelector<HTMLElement>('.work-title');
+        if (primaryFocus) {
+          focusTargets.push(primaryFocus);
+        }
+        if (titleNode) {
+          focusTargets.push(titleNode);
+        }
+        if (!focusTargets.length) {
+          focusTargets.push(
+            queryElementWithFallback<HTMLElement>(node, LOOP_SLIDER_SELECTORS.content) ?? node
+          );
+        }
+        return focusTargets;
+      })(),
       progress: 0,
       targetProgress: 0,
       scale: this.config.baseScale,
@@ -433,7 +452,7 @@ class LoopSliderInstance {
       return;
     }
 
-    const scroll = this.localLenis.scroll;
+    const { scroll } = this.localLenis;
     const limit = Math.max(this.localLenis.limit || loopHeight, loopHeight);
 
     if (this.previousScroll === null) {
@@ -515,8 +534,9 @@ class LoopSliderInstance {
       slide.contentNode.style.transform = `scale(${slide.scale.toFixed(4)})`;
       slide.contentNode.style.opacity = opacity.toFixed(3);
 
-      const blurTarget = slide.mediaNode ?? slide.contentNode;
-      blurTarget.style.filter = `blur(${blurValue.toFixed(2)}px)`;
+      slide.focusNodes.forEach((target) => {
+        target.style.filter = `blur(${blurValue.toFixed(2)}px)`;
+      });
 
       if (slide.blurNode) {
         slide.blurNode.style.opacity = (1 - slide.progress).toFixed(3);

@@ -175,8 +175,10 @@ const initNavInteractions = () => {
 };
 
 const LOOP_SLIDER_SELECTORS = {
-  root: ['[data-loop-slider="root"]', '.slider-section'],
+  root: ['[data-loop-slider="root"]', '.loop-slider-wrapper', '.slider-section'],
+  track: ['[data-loop-slider="track"]', '.loop-slider-track'],
   list: ['[data-loop-slider="list"]', '.slider-wrapper'],
+  loop: ['[data-loop-slider="loop"]', '.loop-slider.w-dyn-list', '.loop-slider'],
   item: ['[data-loop-slider="item"]', '.slide-w'],
   content: ['[data-loop-slider="content"]', '.slide'],
   blur: ['[data-loop-slider="blur"]', '.slide-blur'],
@@ -207,9 +209,6 @@ type SlideState = {
 const LENIS_STYLE_ID = 'loop-slider-lenis-styles';
 const LENIS_STYLES = `html.lenis,html.lenis body{height:auto}.lenis:not(.lenis-autoToggle).lenis-stopped{overflow:clip}.lenis [data-lenis-prevent],.lenis [data-lenis-prevent-wheel],.lenis [data-lenis-prevent-touch]{overscroll-behavior:contain}.lenis.lenis-smooth iframe{pointer-events:none}.lenis.lenis-autoToggle{transition-property:overflow;transition-duration:1ms;transition-behavior:allow-discrete}`;
 
-let lenisInstance: Lenis | null = null;
-let lenisRafId: number | null = null;
-let lenisScrollAttached = false;
 let sliderAnimationFrame: number | null = null;
 let sliderScrollListenerAttached = false;
 let sliderResizeListenerAttached = false;
@@ -227,30 +226,6 @@ const ensureLenisStyles = () => {
   style.id = LENIS_STYLE_ID;
   style.textContent = LENIS_STYLES;
   document.head.appendChild(style);
-};
-
-const ensureLenisInstance = () => {
-  if (lenisInstance) {
-    return lenisInstance;
-  }
-
-  ensureLenisStyles();
-
-  lenisInstance = new Lenis({
-    smoothWheel: true,
-    infinite: true,
-    syncTouch: true,
-    touchMultiplier: 0.65,
-  });
-
-  const raf = (time: number) => {
-    lenisInstance?.raf(time);
-    lenisRafId = window.requestAnimationFrame(raf);
-  };
-
-  lenisRafId = window.requestAnimationFrame(raf);
-
-  return lenisInstance;
 };
 
 const queryElementWithFallback = <T extends Element>(
@@ -292,41 +267,75 @@ class LoopSliderInstance {
   private readonly config = LOOP_SLIDER_CONFIG;
   private slides: SlideState[] = [];
   private viewportHeight = window.innerHeight || 0;
-  private listElement: HTMLElement | null = null;
-  private wrapperContainer: HTMLElement | null = null;
+  private primaryList: HTMLElement | null = null;
   private loopHeight = 0;
   private loopOffset = 0;
+  private virtualScroll = 0;
+  private loopIndex = 0;
   private previousScroll: number | null = null;
+  private trackElement: HTMLElement | null = null;
+  private loopLists: HTMLElement[] = [];
+  private localLenis: Lenis | null = null;
+  private localLenisRaf: number | null = null;
+  private handleLenisScroll?: () => void;
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.prefersInfinite = root.dataset.loopSliderInfinite !== 'false';
 
+    const track = queryElementWithFallback<HTMLElement>(root, LOOP_SLIDER_SELECTORS.track);
     const list = queryElementWithFallback<HTMLElement>(root, LOOP_SLIDER_SELECTORS.list);
 
-    if (!list) {
+    if (!list || !track) {
       throw new Error(
         'Loop slider list not found. Add data-loop-slider="list" to the slider wrapper.'
       );
     }
 
-    this.ensureLoopFiller(list);
-    this.listElement = list;
-    this.wrapperContainer = list.parentElement;
-    this.loopHeight = list.scrollHeight;
+    this.primaryList = list;
+    this.loopHeight = this.primaryList.scrollHeight;
+    this.trackElement = track;
+    this.prepareLoopLists(track);
+
+    if (this.prefersInfinite) {
+      this.initLocalLenis();
+    }
+
     this.collectSlides();
   }
 
-  private ensureLoopFiller(list: HTMLElement) {
-    const parent = list.parentElement;
-
-    if (!parent || parent.querySelector('.loop-filler')) {
+  private initLocalLenis() {
+    if (this.localLenis || !this.trackElement) {
       return;
     }
 
-    const clone = list.cloneNode(true) as HTMLElement;
-    clone.classList.add('loop-filler');
-    parent.appendChild(clone);
+    ensureLenisStyles();
+
+    this.root.style.overflow = this.root.style.overflow || 'hidden';
+    this.root.style.position = this.root.style.position || 'relative';
+    this.trackElement.style.willChange = this.trackElement.style.willChange || 'transform';
+
+    this.localLenis = new Lenis({
+      wrapper: this.root,
+      content: this.trackElement,
+      smoothWheel: true,
+      infinite: true,
+      syncTouch: true,
+      touchMultiplier: 0.65,
+    });
+
+    this.handleLenisScroll = () => {
+      this.measure();
+    };
+
+    this.localLenis.on('scroll', this.handleLenisScroll);
+
+    const raf = (time: number) => {
+      this.localLenis?.raf(time);
+      this.localLenisRaf = window.requestAnimationFrame(raf);
+    };
+
+    this.localLenisRaf = window.requestAnimationFrame(raf);
   }
 
   private collectSlides() {
@@ -352,27 +361,116 @@ class LoopSliderInstance {
     });
   }
 
-  private adjustLoopOffset() {
-    if (!lenisInstance || !this.wrapperContainer || !this.loopHeight) {
+  private prepareLoopLists(track: HTMLElement) {
+    this.loopLists = queryAllWithFallback<HTMLElement>(track, LOOP_SLIDER_SELECTORS.loop);
+
+    if (!this.loopLists.length) {
+      this.loopLists = [];
       return;
     }
 
-    const scroll = lenisInstance.scroll;
-    const limit = Math.max(lenisInstance.limit || 0, 1);
+    if (this.loopLists.length < 2) {
+      const clone = this.loopLists[0].cloneNode(true) as HTMLElement;
+      track.appendChild(clone);
+      this.loopLists.push(clone);
+    }
+  }
 
-    if (this.previousScroll !== null) {
-      const nearTop = this.previousScroll < limit * 0.2 && scroll > limit * 0.8;
-      const nearBottom = this.previousScroll > limit * 0.8 && scroll < limit * 0.2;
-
-      if (nearBottom) {
-        this.loopOffset -= this.loopHeight;
-      } else if (nearTop) {
-        this.loopOffset += this.loopHeight;
-      }
+  private rotateLists(direction: 'forward' | 'backward') {
+    if (!this.trackElement || !this.loopLists.length) {
+      return;
     }
 
+    if (direction === 'forward') {
+      const first = this.loopLists.shift();
+
+      if (!first) {
+        return;
+      }
+
+      this.trackElement.appendChild(first);
+      this.loopLists.push(first);
+    } else {
+      const last = this.loopLists.pop();
+
+      if (!last) {
+        return;
+      }
+
+      const firstChild = this.trackElement.firstElementChild;
+      if (firstChild) {
+        this.trackElement.insertBefore(last, firstChild);
+      } else {
+        this.trackElement.appendChild(last);
+      }
+
+      this.loopLists.unshift(last);
+    }
+  }
+
+  private computeLoopHeight() {
+    if (!this.primaryList) {
+      return this.loopHeight;
+    }
+
+    const height = this.primaryList.scrollHeight || this.primaryList.offsetHeight;
+
+    if (height) {
+      this.loopHeight = height;
+    }
+
+    return this.loopHeight;
+  }
+
+  private applyLoopOffset() {
+    if (!this.prefersInfinite || !this.localLenis || !this.trackElement) {
+      return;
+    }
+
+    const loopHeight = this.loopHeight || this.computeLoopHeight();
+
+    if (!loopHeight) {
+      return;
+    }
+
+    const scroll = this.localLenis.scroll;
+    const limit = Math.max(this.localLenis.limit || loopHeight, loopHeight);
+
+    if (this.previousScroll === null) {
+      this.previousScroll = scroll;
+      this.virtualScroll = 0;
+      this.loopIndex = 0;
+      this.loopOffset = 0;
+      this.trackElement.style.transform = '';
+      return;
+    }
+
+    let delta = scroll - this.previousScroll;
+
+    if (Math.abs(delta) > limit * 0.5) {
+      delta += delta > 0 ? -limit : limit;
+    }
+
+    this.virtualScroll += delta;
     this.previousScroll = scroll;
-    this.wrapperContainer.style.transform = `translate3d(0, ${this.loopOffset}px, 0)`;
+    const nextLoopIndex = Math.floor(this.virtualScroll / loopHeight);
+    let diff = nextLoopIndex - this.loopIndex;
+
+    while (diff > 0) {
+      this.rotateLists('forward');
+      this.loopIndex += 1;
+      diff -= 1;
+    }
+
+    while (diff < 0) {
+      this.rotateLists('backward');
+      this.loopIndex -= 1;
+      diff += 1;
+    }
+
+    const remainder = this.virtualScroll - this.loopIndex * loopHeight;
+    this.loopOffset = scroll - remainder;
+    this.trackElement.style.transform = `translate3d(0, ${this.loopOffset}px, 0)`;
   }
 
   public measure() {
@@ -382,7 +480,8 @@ class LoopSliderInstance {
 
     const viewportHeight = Math.max(window.innerHeight, 1);
     this.viewportHeight = viewportHeight;
-    this.adjustLoopOffset();
+    this.computeLoopHeight();
+    this.applyLoopOffset();
     const viewportTop = 0;
     const viewportBottom = viewportHeight;
 
@@ -449,15 +548,6 @@ const attachResizeListener = () => {
   sliderResizeListenerAttached = true;
 };
 
-const attachLenisScrollListener = () => {
-  if (!lenisInstance || lenisScrollAttached) {
-    return;
-  }
-
-  lenisInstance.on('scroll', triggerSliderMeasurements);
-  lenisScrollAttached = true;
-};
-
 const startSliderAnimationLoop = () => {
   if (sliderAnimationFrame !== null) {
     return;
@@ -500,13 +590,6 @@ const initLoopSlider = () => {
   }
 
   loopSliderInstances.push(...instances);
-
-  const shouldUseLenis = loopSliderInstances.some((instance) => instance.prefersInfinite);
-
-  if (shouldUseLenis) {
-    ensureLenisInstance();
-    attachLenisScrollListener();
-  }
 
   attachNativeScrollListener();
   attachResizeListener();

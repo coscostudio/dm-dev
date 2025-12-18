@@ -33,9 +33,26 @@ const getNavElements = (): NavElements | null => {
   return { wrapper, toggle, openIcon, closeIcon, links };
 };
 
-const NAV_OPEN_CLASS = 'is-nav-open';
-const NAV_LINKS_VISIBLE_CLASS = 'are-nav-links-visible';
+export const NAV_OPEN_CLASS = 'is-nav-open';
+export const NAV_LINKS_VISIBLE_CLASS = 'are-nav-links-visible';
 const LINKS_FADE_DURATION = 320;
+
+export const forceCloseNav = () => {
+  const elements = getNavElements();
+
+  if (!elements) {
+    return;
+  }
+
+  const { wrapper, toggle, openIcon, closeIcon } = elements;
+  wrapper.classList.remove(NAV_OPEN_CLASS, NAV_LINKS_VISIBLE_CLASS);
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-pressed', 'false');
+  openIcon.toggleAttribute('aria-hidden', false);
+  closeIcon.toggleAttribute('aria-hidden', true);
+  openIcon.hidden = false;
+  closeIcon.hidden = true;
+};
 
 export const initNavInteractions = (): NavCleanup | null => {
   const elements = getNavElements();
@@ -65,6 +82,15 @@ export const initNavInteractions = (): NavCleanup | null => {
     wrapper.classList.toggle(NAV_OPEN_CLASS, state.isOpen);
     toggle.setAttribute('aria-expanded', String(state.isOpen));
     toggle.setAttribute('aria-pressed', String(state.isOpen));
+    reflectIcons();
+  };
+
+  const resetNavState = () => {
+    state.isOpen = false;
+    state.isLockedOpen = false;
+    wrapper.classList.remove(NAV_OPEN_CLASS, NAV_LINKS_VISIBLE_CLASS);
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-pressed', 'false');
     reflectIcons();
   };
 
@@ -198,5 +224,7 @@ export const initNavInteractions = (): NavCleanup | null => {
     links.forEach((link) => {
       link.removeEventListener('click', handleLinkClick);
     });
+
+    resetNavState();
   };
 };

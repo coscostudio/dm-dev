@@ -1181,8 +1181,13 @@
     if (!drawer) {
       return;
     }
-    setDrawerState(drawer, isOpen, true, true, forceImportant);
-    await waitForTransition(drawer);
+    void drawer.getBoundingClientRect();
+    await new Promise((resolve) => {
+      window.requestAnimationFrame(() => {
+        setDrawerState(drawer, isOpen, true, true, forceImportant);
+        waitForTransition(drawer).then(resolve);
+      });
+    });
   };
   var setCloseTriggerVisible = (isVisible) => {
     const close = getCloseTrigger();
@@ -1197,33 +1202,41 @@
   };
   var prepareContainer = (container, isPeripheral) => {
     const { style } = container;
-    style.position = "relative";
-    style.top = "";
-    style.left = "";
-    style.right = "";
-    style.bottom = "";
+    style.position = isPeripheral ? "fixed" : "relative";
+    style.top = isPeripheral ? "0" : "";
+    style.right = isPeripheral ? "0" : "";
+    style.bottom = isPeripheral ? "0" : "";
+    style.left = isPeripheral ? `var(--drawer-gap, ${DRAWER_GAP})` : "";
     style.width = isPeripheral ? `calc(100vw - var(--drawer-gap, ${DRAWER_GAP}))` : "100%";
+    style.maxWidth = isPeripheral ? "none" : "";
     style.minHeight = style.minHeight || "100vh";
+    style.overflowY = isPeripheral ? "auto" : "";
     style.willChange = "transform, opacity";
     style.zIndex = isPeripheral ? "20" : "0";
   };
   var placeContainerOffscreen = (container) => {
     const { style } = container;
-    style.transition = "none";
-    style.transform = `translateX(${OFFSCREEN_TRANSLATE})`;
+    style.setProperty("transition", "none", "important");
+    style.setProperty("transform", `translateX(${OFFSCREEN_TRANSLATE})`, "important");
   };
   var animateContainerTo = async (container, translateX) => {
     const { style } = container;
+    style.setProperty("will-change", "transform, opacity");
     void container.getBoundingClientRect();
     return new Promise((resolve) => {
       requestAnimationFrame(() => {
-        style.transitionProperty = "transform, opacity";
-        style.transitionDuration = `${TRANSITION_DURATION}ms`;
-        style.transitionTimingFunction = EASING;
-        style.transform = translateX;
+        style.setProperty("transition-property", "transform, opacity", "important");
+        style.setProperty("transition-duration", `${TRANSITION_DURATION}ms`, "important");
+        style.setProperty("transition-timing-function", EASING, "important");
+        style.setProperty("transform", translateX, "important");
         waitForTransition(container).then(resolve);
       });
     });
+  };
+  var hideCurrentContainer = (container) => {
+    if (!container) return;
+    container.style.setProperty("opacity", "0", "important");
+    container.style.pointerEvents = "none";
   };
   var syncInitialState = () => {
     const container = document.querySelector(BARBA_CONTAINER_SELECTOR);
@@ -1267,33 +1280,47 @@
           beforeEnter: ({ next }) => {
             const nextContainer = next.container;
             if (!nextContainer) return;
-            prepareContainer(nextContainer, true);
-            placeContainerOffscreen(nextContainer);
-            setCloseTriggerVisible(true);
-          },
-          leave: async ({ next }) => {
-            onBeforeLeave?.();
-            ensureDrawerBaseStyles();
-            const nextNs = getNamespace(next?.container);
-            document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
             const drawer = getDrawer();
+            const nextNs = getNamespace(next.container);
+            document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
+            setCloseTriggerVisible(true);
+            ensureDrawerBaseStyles();
             if (drawer) {
               applyDrawerLayout(drawer, true);
-              setDrawerState(drawer, false, false, true, true);
+              drawer.style.setProperty("transition-property", "transform", "important");
+              drawer.style.setProperty(
+                "transition-duration",
+                `${TRANSITION_DURATION}ms`,
+                "important"
+              );
+              drawer.style.setProperty("transition-timing-function", EASING, "important");
             }
+            prepareContainer(nextContainer, true);
+            placeContainerOffscreen(nextContainer);
+            nextContainer.style.setProperty("opacity", "1", "important");
+          },
+          leave: async ({ current, next }) => {
+            onBeforeLeave?.();
+            hideCurrentContainer(current?.container);
             const nextContainer = next.container;
             if (nextContainer) {
               prepareContainer(nextContainer, true);
               placeContainerOffscreen(nextContainer);
-              nextContainer.style.opacity = "1";
+              nextContainer.style.setProperty("opacity", "1", "important");
             }
-            await Promise.all([
-              animateDrawer(true, true),
-              nextContainer ? animateContainerTo(nextContainer, "translateX(0)") : Promise.resolve()
-            ]);
           },
           enter: async ({ next }) => {
+            const animations = [];
+            const nextContainer = next.container;
+            if (nextContainer) {
+              animations.push(animateContainerTo(nextContainer, "translateX(0)"));
+            }
             const drawer = getDrawer();
+            if (drawer) {
+              applyDrawerLayout(drawer, true);
+              animations.push(animateDrawer(true, true));
+            }
+            await Promise.all(animations);
             if (drawer) {
               setDrawerState(drawer, true, false, true);
             }
@@ -1308,6 +1335,7 @@
             const nextContainer = next.container;
             if (!nextContainer) return;
             prepareContainer(nextContainer, false);
+            nextContainer.style.transition = "none";
             nextContainer.style.transform = "translateX(0)";
             nextContainer.style.opacity = "0";
             setCloseTriggerVisible(false);
@@ -2843,6 +2871,20 @@
   var NAV_OPEN_CLASS = "is-nav-open";
   var NAV_LINKS_VISIBLE_CLASS = "are-nav-links-visible";
   var LINKS_FADE_DURATION = 320;
+  var forceCloseNav = () => {
+    const elements = getNavElements();
+    if (!elements) {
+      return;
+    }
+    const { wrapper, toggle, openIcon, closeIcon } = elements;
+    wrapper.classList.remove(NAV_OPEN_CLASS, NAV_LINKS_VISIBLE_CLASS);
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-pressed", "false");
+    openIcon.toggleAttribute("aria-hidden", false);
+    closeIcon.toggleAttribute("aria-hidden", true);
+    openIcon.hidden = false;
+    closeIcon.hidden = true;
+  };
   var initNavInteractions = () => {
     const elements = getNavElements();
     if (!elements) {
@@ -2866,6 +2908,14 @@
       wrapper.classList.toggle(NAV_OPEN_CLASS, state.isOpen);
       toggle.setAttribute("aria-expanded", String(state.isOpen));
       toggle.setAttribute("aria-pressed", String(state.isOpen));
+      reflectIcons();
+    };
+    const resetNavState = () => {
+      state.isOpen = false;
+      state.isLockedOpen = false;
+      wrapper.classList.remove(NAV_OPEN_CLASS, NAV_LINKS_VISIBLE_CLASS);
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.setAttribute("aria-pressed", "false");
       reflectIcons();
     };
     const nextFrame = (callback) => {
@@ -2971,6 +3021,7 @@
       links.forEach((link) => {
         link.removeEventListener("click", handleLinkClick);
       });
+      resetNavState();
     };
   };
 
@@ -2983,8 +3034,24 @@
   };
   var initFeatures = () => {
     cleanupFeatures();
-    navCleanup = initNavInteractions();
+    const isPeripheral = document.body.classList.contains("is-in-peripheral");
+    if (!isPeripheral) {
+      navCleanup = initNavInteractions();
+    } else {
+      forceCloseNav();
+      navCleanup = null;
+    }
     initLoopSlider();
+    window.requestAnimationFrame(() => {
+      navCleanup?.();
+      const isStillPeripheral = document.body.classList.contains("is-in-peripheral");
+      if (!isStillPeripheral) {
+        navCleanup = initNavInteractions();
+      } else {
+        forceCloseNav();
+        navCleanup = null;
+      }
+    });
   };
   var init = () => {
     initFeatures();

@@ -207,9 +207,15 @@ const animateDrawer = async (isOpen: boolean, forceImportant = false) => {
     return;
   }
 
-  // start from current state and ensure we actually animate; force important so CSS can't override
-  setDrawerState(drawer, isOpen, true, true, forceImportant);
-  await waitForTransition(drawer);
+  // Force the current (pre-animation) state to stick, then flip to the target
+  // state on the next frame so the transition actually runs.
+  void drawer.getBoundingClientRect();
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      setDrawerState(drawer, isOpen, true, true, forceImportant);
+      waitForTransition(drawer).then(resolve);
+    });
+  });
 };
 
 const setCloseTriggerVisible = (isVisible: boolean) => {
@@ -234,36 +240,45 @@ const syncDrawerStateForNamespace = (namespace: string | null | undefined) => {
 
 const prepareContainer = (container: HTMLElement, isPeripheral: boolean) => {
   const { style } = container;
-  style.position = 'relative';
-  style.top = '';
-  style.left = '';
-  style.right = '';
-  style.bottom = '';
+  style.position = isPeripheral ? 'fixed' : 'relative';
+  style.top = isPeripheral ? '0' : '';
+  style.right = isPeripheral ? '0' : '';
+  style.bottom = isPeripheral ? '0' : '';
+  style.left = isPeripheral ? `var(--drawer-gap, ${DRAWER_GAP})` : '';
   style.width = isPeripheral ? `calc(100vw - var(--drawer-gap, ${DRAWER_GAP}))` : '100%';
+  style.maxWidth = isPeripheral ? 'none' : '';
   style.minHeight = style.minHeight || '100vh';
+  style.overflowY = isPeripheral ? 'auto' : '';
   style.willChange = 'transform, opacity';
   style.zIndex = isPeripheral ? '20' : '0';
 };
 
 const placeContainerOffscreen = (container: HTMLElement) => {
   const { style } = container;
-  style.transition = 'none';
-  style.transform = `translateX(${OFFSCREEN_TRANSLATE})`;
+  style.setProperty('transition', 'none', 'important');
+  style.setProperty('transform', `translateX(${OFFSCREEN_TRANSLATE})`, 'important');
 };
 
 const animateContainerTo = async (container: HTMLElement, translateX: string) => {
   const { style } = container;
+  style.setProperty('will-change', 'transform, opacity');
   // force a reflow to ensure the previous transform sticks before animating
   void container.getBoundingClientRect();
   return new Promise<void>((resolve) => {
     requestAnimationFrame(() => {
-      style.transitionProperty = 'transform, opacity';
-      style.transitionDuration = `${TRANSITION_DURATION}ms`;
-      style.transitionTimingFunction = EASING;
-      style.transform = translateX;
+      style.setProperty('transition-property', 'transform, opacity', 'important');
+      style.setProperty('transition-duration', `${TRANSITION_DURATION}ms`, 'important');
+      style.setProperty('transition-timing-function', EASING, 'important');
+      style.setProperty('transform', translateX, 'important');
       waitForTransition(container).then(resolve);
     });
   });
+};
+
+const hideCurrentContainer = (container: HTMLElement | null | undefined) => {
+  if (!container) return;
+  container.style.setProperty('opacity', '0', 'important');
+  container.style.pointerEvents = 'none';
 };
 
 const syncInitialState = () => {
@@ -314,34 +329,47 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
         beforeEnter: ({ next }) => {
           const nextContainer = next.container as HTMLElement | null;
           if (!nextContainer) return;
-          prepareContainer(nextContainer, true);
-          placeContainerOffscreen(nextContainer);
-          setCloseTriggerVisible(true);
-        },
-        leave: async ({ next }) => {
-          onBeforeLeave?.();
-          ensureDrawerBaseStyles();
-          const nextNs = getNamespace(next?.container);
-          document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
           const drawer = getDrawer();
+          const nextNs = getNamespace(next.container);
+          document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
+          setCloseTriggerVisible(true);
+          ensureDrawerBaseStyles();
           if (drawer) {
             applyDrawerLayout(drawer, true);
-            setDrawerState(drawer, false, false, true, true);
+            drawer.style.setProperty('transition-property', 'transform', 'important');
+            drawer.style.setProperty(
+              'transition-duration',
+              `${TRANSITION_DURATION}ms`,
+              'important'
+            );
+            drawer.style.setProperty('transition-timing-function', EASING, 'important');
           }
+          prepareContainer(nextContainer, true);
+          placeContainerOffscreen(nextContainer);
+          nextContainer.style.setProperty('opacity', '1', 'important');
+        },
+        leave: async ({ current, next }) => {
+          onBeforeLeave?.();
+          hideCurrentContainer(current?.container as HTMLElement | null);
           const nextContainer = next.container as HTMLElement | null;
           if (nextContainer) {
             prepareContainer(nextContainer, true);
             placeContainerOffscreen(nextContainer);
-            nextContainer.style.opacity = '1';
+            nextContainer.style.setProperty('opacity', '1', 'important');
           }
-          await Promise.all([
-            animateDrawer(true, true),
-            nextContainer ? animateContainerTo(nextContainer, 'translateX(0)') : Promise.resolve(),
-          ]);
         },
         enter: async ({ next }) => {
-          // drawer/container already animated in leave (sync), just ensure final state
+          const animations: Promise<void>[] = [];
+          const nextContainer = next.container as HTMLElement | null;
+          if (nextContainer) {
+            animations.push(animateContainerTo(nextContainer, 'translateX(0)'));
+          }
           const drawer = getDrawer();
+          if (drawer) {
+            applyDrawerLayout(drawer, true);
+            animations.push(animateDrawer(true, true));
+          }
+          await Promise.all(animations);
           if (drawer) {
             setDrawerState(drawer, true, false, true);
           }
@@ -356,6 +384,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           const nextContainer = next.container as HTMLElement | null;
           if (!nextContainer) return;
           prepareContainer(nextContainer, false);
+          nextContainer.style.transition = 'none';
           nextContainer.style.transform = 'translateX(0)';
           nextContainer.style.opacity = '0';
           setCloseTriggerVisible(false);

@@ -54,6 +54,16 @@ export const forceCloseNav = () => {
   closeIcon.hidden = true;
 };
 
+export const setNavVisible = (isVisible: boolean) => {
+  const elements = getNavElements();
+  if (!elements) return;
+
+  const { wrapper } = elements;
+  wrapper.style.opacity = isVisible ? '1' : '0';
+  wrapper.style.pointerEvents = isVisible ? '' : 'none';
+  wrapper.style.visibility = isVisible ? '' : 'hidden'; // Ensure it doesn't block clicks when hidden
+};
+
 export const initNavInteractions = (): NavCleanup | null => {
   const elements = getNavElements();
 

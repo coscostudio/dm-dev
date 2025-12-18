@@ -1,6 +1,6 @@
 import { initBarba } from './features/barba';
 import { destroyLoopSlider, initLoopSlider } from './features/loopSlider';
-import { forceCloseNav, initNavInteractions } from './features/nav';
+import { forceCloseNav, initNavInteractions, setNavVisible } from './features/nav';
 
 let navCleanup: (() => void) | null = null;
 
@@ -14,9 +14,11 @@ const initFeatures = () => {
   cleanupFeatures();
   const isPeripheral = document.body.classList.contains('is-in-peripheral');
   if (!isPeripheral) {
+    setNavVisible(true);
     navCleanup = initNavInteractions();
   } else {
     forceCloseNav();
+    setNavVisible(false);
     navCleanup = null;
   }
   initLoopSlider();
@@ -25,9 +27,11 @@ const initFeatures = () => {
     navCleanup?.();
     const isStillPeripheral = document.body.classList.contains('is-in-peripheral');
     if (!isStillPeripheral) {
+      setNavVisible(true);
       navCleanup = initNavInteractions();
     } else {
       forceCloseNav();
+      setNavVisible(false);
       navCleanup = null;
     }
   });

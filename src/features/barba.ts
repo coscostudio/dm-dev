@@ -1,5 +1,7 @@
 import barba from '@barba/core';
 
+import { setNavVisible } from './nav';
+
 type BarbaCallbacks = {
   onAfterEnter: () => void;
   onBeforeLeave?: () => void;
@@ -25,6 +27,9 @@ const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const DRAWER_GAP = '5rem';
 const OFFSCREEN_TRANSLATE = 'calc(100vw - var(--drawer-gap, 5rem))';
 const BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
+const LOGO_PARENT_SELECTOR = '.logo';
+const LOGO_FULL_SELECTOR = '.logo > .logo-wrapper:first-child';
+const LOGO_ICON_SELECTOR = '.logo > .logo-wrapper:last-child';
 
 const setCssVars = () => {
   if (!document.documentElement.style.getPropertyValue('--drawer-gap')) {
@@ -34,6 +39,15 @@ const setCssVars = () => {
 
 const getDrawer = () => document.querySelector<HTMLElement>(DRAWER_SELECTOR);
 const getCloseTrigger = () => document.querySelector<HTMLElement>(CLOSE_SELECTOR);
+
+const getLogoElements = () => {
+  const parent = document.querySelector<HTMLElement>(LOGO_PARENT_SELECTOR);
+  const wrappers = document.querySelectorAll<HTMLElement>(`${LOGO_PARENT_SELECTOR} .logo-wrapper`);
+  const full = wrappers[0] as HTMLElement | undefined;
+  const icon = wrappers[1] as HTMLElement | undefined;
+  return { parent, full, icon };
+};
+
 const getNamespace = (container?: Element | null) =>
   container?.getAttribute('data-barba-namespace') ?? null;
 const isPeripheralNamespace = (ns: string | null | undefined) => Boolean(ns && ns !== 'home');
@@ -131,18 +145,91 @@ const ensureDrawerBaseStyles = () => {
   drawer.style.transitionProperty = drawer.style.transitionProperty || 'transform';
 };
 
-const applyDrawerLayout = (drawer: HTMLElement, isPeripheral: boolean) => {
+const setLogoState = (isPeripheral: boolean) => {
+  const { parent, full, icon } = getLogoElements();
+
+  // Debug logging - moved before check
+  console.log('setLogoState check:', {
+    isPeripheral,
+    hasParent: !!parent,
+    hasFull: !!full,
+    hasIcon: !!icon,
+    parentSelector: LOGO_PARENT_SELECTOR,
+    foundWrappers: document.querySelectorAll(`${LOGO_PARENT_SELECTOR} .logo-wrapper`).length,
+  });
+
+  if (!parent || !full || !icon) return;
+
+  const commonStyles = {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    transition: `opacity ${TRANSITION_DURATION}ms ${EASING}, transform ${TRANSITION_DURATION}ms ${EASING}`,
+  };
+
+  Object.assign(full.style, commonStyles, {
+    opacity: isPeripheral ? '0' : '1',
+    transform: isPeripheral ? 'scale(0.8)' : 'scale(1)',
+    pointerEvents: isPeripheral ? 'none' : 'auto',
+  });
+
+  // Debug logging
+  console.log('setLogoState run:', { isPeripheral, full: !!full, icon: !!icon });
+
+  // Force !important using setProperty since Object.assign doesn't support it directly
+  full.style.setProperty('opacity', isPeripheral ? '0' : '1', 'important');
+  full.style.setProperty('pointer-events', isPeripheral ? 'none' : 'auto', 'important');
+  full.style.setProperty('transform', isPeripheral ? 'scale(0.8)' : 'scale(1)', 'important');
+  full.style.setProperty('z-index', '100', 'important');
+
+  Object.assign(icon.style, commonStyles, {
+    // base styles
+  });
+
+  icon.style.setProperty('opacity', isPeripheral ? '1' : '0', 'important');
+  icon.style.setProperty('pointer-events', isPeripheral ? 'auto' : 'none', 'important');
+  icon.style.setProperty('transform', isPeripheral ? 'scale(1)' : 'scale(1.2)', 'important');
+  icon.style.setProperty('z-index', '100', 'important');
+};
+
+const animateLogo = async (toPeripheral: boolean) => {
+  const { parent, full, icon } = getLogoElements();
+  if (!parent || !full || !icon) return;
+
+  const transition = `opacity ${TRANSITION_DURATION}ms ${EASING}, transform ${TRANSITION_DURATION}ms ${EASING}`;
+  full.style.transition = transition;
+  icon.style.transition = transition;
+
+  full.style.position = 'absolute';
+  full.style.left = '0';
+  full.style.top = '0';
+
+  icon.style.position = 'absolute';
+  icon.style.left = '0';
+  icon.style.top = '0';
+
+  // Force reflow
+  void full.getBoundingClientRect();
+
+  requestAnimationFrame(() => {
+    setLogoState(toPeripheral);
+  });
+};
+
+const applyDrawerLayout = (drawer: HTMLElement, isPeripheral: boolean, skipWidth = false) => {
   if (isPeripheral) {
     drawer.style.position = 'fixed';
     drawer.style.top = '0';
     drawer.style.right = '0';
     drawer.style.bottom = '0';
     drawer.style.left = '';
-    drawer.style.setProperty(
-      'width',
-      `calc(100vw - var(--drawer-gap, ${DRAWER_GAP}))`,
-      'important'
-    );
+    if (!skipWidth) {
+      drawer.style.setProperty(
+        'width',
+        `calc(100vw - var(--drawer-gap, ${DRAWER_GAP}))`,
+        'important'
+      );
+    }
     drawer.style.setProperty('max-width', 'none', 'important');
   } else {
     drawer.style.position = 'absolute';
@@ -289,6 +376,7 @@ const syncInitialState = () => {
 
   document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheral);
   setCloseTriggerVisible(isPeripheral);
+  setLogoState(isPeripheral);
 
   if (drawer) {
     if (isPeripheral) {
@@ -330,20 +418,49 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           const nextContainer = next.container as HTMLElement | null;
           if (!nextContainer) return;
           const drawer = getDrawer();
+          animateLogo(true);
           const nextNs = getNamespace(next.container);
           document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
           setCloseTriggerVisible(true);
           ensureDrawerBaseStyles();
           if (drawer) {
-            applyDrawerLayout(drawer, true);
-            drawer.style.setProperty('transition-property', 'transform', 'important');
+            // Check if Nav is open (prevent snapping)
+            const isNavOpen =
+              document.body.classList.contains('is-nav-open') ||
+              drawer.classList.contains('is-nav-open');
+            if (isNavOpen) {
+              const currentWidth = drawer.getBoundingClientRect().width;
+              // Lock current width immediately
+              drawer.style.setProperty('width', `${currentWidth}px`, 'important');
+              // Force reflow
+              void drawer.offsetWidth;
+            }
+
+            // Apply fixed layout, but skip setting the final calc width if we are animating it
+            applyDrawerLayout(drawer, true, isNavOpen);
+
+            // Now set up the transition
+            const prop = isNavOpen ? 'transform, width' : 'transform';
+            drawer.style.setProperty('transition-property', prop, 'important');
             drawer.style.setProperty(
               'transition-duration',
               `${TRANSITION_DURATION}ms`,
               'important'
             );
             drawer.style.setProperty('transition-timing-function', EASING, 'important');
+
+            if (isNavOpen) {
+              // Now set the target width to animate TO
+              requestAnimationFrame(() => {
+                drawer.style.setProperty(
+                  'width',
+                  `calc(100vw - var(--drawer-gap, ${DRAWER_GAP}))`,
+                  'important'
+                );
+              });
+            }
           }
+          setNavVisible(false);
           prepareContainer(nextContainer, true);
           placeContainerOffscreen(nextContainer);
           nextContainer.style.setProperty('opacity', '1', 'important');
@@ -392,6 +509,9 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
         leave: async ({ current }) => {
           onBeforeLeave?.();
           const animations: Promise<void>[] = [];
+
+          animateLogo(false);
+
           const currentContainer = current.container as HTMLElement | null;
           if (currentContainer) {
             prepareContainer(currentContainer, true);
@@ -410,6 +530,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           const nextNs = getNamespace(next.container);
           document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
           setCloseTriggerVisible(false);
+          setNavVisible(true);
           const drawer = getDrawer();
           if (drawer) {
             resetDrawerStylesForHome();

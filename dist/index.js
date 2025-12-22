@@ -1228,16 +1228,10 @@
   var DRAWER_GAP = "5rem";
   var OFFSCREEN_TRANSLATE = "calc(100vw - var(--drawer-gap, 5rem))";
   var BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
-<<<<<<< HEAD
-  var LOGO_PARENT_SELECTOR = ".logo-wrapper";
-  var LOGO_FULL_SELECTOR = ".logo:not(.icon)";
-  var LOGO_ICON_SELECTOR = ".logo.icon";
-=======
   var LOGO_PARENT_CANDIDATES = ["[data-logo-parent]", ".logo-2"];
   var LOGO_WRAPPER_SELECTOR = ".logo-wrapper";
   var LOGO_FULL_FALLBACK_SELECTOR = ".logo:not(.icon)";
   var LOGO_ICON_FALLBACK_SELECTOR = ".logo.icon";
->>>>>>> a9beef3791b662ac93906ea69bd4e4d1cd669cd6
   var setCssVars = () => {
     if (!document.documentElement.style.getPropertyValue("--drawer-gap")) {
       document.documentElement.style.setProperty("--drawer-gap", DRAWER_GAP);
@@ -1246,12 +1240,6 @@
   var getDrawer = () => document.querySelector(DRAWER_SELECTOR);
   var getCloseTrigger = () => document.querySelector(CLOSE_SELECTOR);
   var getLogoElements = () => {
-<<<<<<< HEAD
-    const parent = document.querySelector(LOGO_PARENT_SELECTOR);
-    const full = document.querySelector(LOGO_FULL_SELECTOR);
-    const icon = document.querySelector(LOGO_ICON_SELECTOR);
-    return { parent, full, icon };
-=======
     const parent = LOGO_PARENT_CANDIDATES.reduce((found, selector) => {
       if (found) return found;
       return document.querySelector(selector);
@@ -1273,7 +1261,6 @@
       return { parent, full: fullEmbed, icon: iconEmbed };
     }
     return { parent, full: void 0, icon: void 0 };
->>>>>>> a9beef3791b662ac93906ea69bd4e4d1cd669cd6
   };
   var getNamespace = (container) => container?.getAttribute("data-barba-namespace") ?? null;
   var isPeripheralNamespace = (ns) => Boolean(ns && ns !== "home");
@@ -1348,22 +1335,10 @@
   };
   var setLogoState = (isPeripheral) => {
     const { parent, full, icon } = getLogoElements();
-<<<<<<< HEAD
-    console.log("setLogoState check:", {
-      isPeripheral,
-      hasParent: !!parent,
-      hasFull: !!full,
-      hasIcon: !!icon,
-      parentSelector: LOGO_PARENT_SELECTOR,
-      foundWrappers: document.querySelectorAll(`${LOGO_PARENT_SELECTOR} .logo-wrapper`).length
-    });
-    if (!parent || !full || !icon) return;
-=======
     if (!parent || !full || !icon) return;
     if (window.getComputedStyle(parent).position === "static") {
       parent.style.setProperty("position", "relative");
     }
->>>>>>> a9beef3791b662ac93906ea69bd4e4d1cd669cd6
     const commonStyles = {
       position: "absolute",
       left: "0",
@@ -1375,10 +1350,6 @@
       transform: isPeripheral ? "scale(0.8)" : "scale(1)",
       pointerEvents: isPeripheral ? "none" : "auto"
     });
-<<<<<<< HEAD
-    console.log("setLogoState run:", { isPeripheral, full: !!full, icon: !!icon });
-=======
->>>>>>> a9beef3791b662ac93906ea69bd4e4d1cd669cd6
     full.style.setProperty("opacity", isPeripheral ? "0" : "1", "important");
     full.style.setProperty("pointer-events", isPeripheral ? "none" : "auto", "important");
     full.style.setProperty("transform", isPeripheral ? "scale(0.8)" : "scale(1)", "important");
@@ -1685,6 +1656,13 @@
               nextContainer.style.transitionDuration = `${TRANSITION_DURATION}ms`;
               nextContainer.style.transitionTimingFunction = EASING;
               nextContainer.style.opacity = "1";
+            }
+          },
+          after: () => {
+            const drawer = getDrawer();
+            if (drawer) {
+              resetDrawerStylesForHome();
+              applyDrawerLayout(drawer, false);
             }
           }
         }

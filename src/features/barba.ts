@@ -28,16 +28,10 @@ const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const DRAWER_GAP = '5rem';
 const OFFSCREEN_TRANSLATE = 'calc(100vw - var(--drawer-gap, 5rem))';
 const BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
-<<<<<<< HEAD
-const LOGO_PARENT_SELECTOR = '.logo-wrapper';
-const LOGO_FULL_SELECTOR = '.logo:not(.icon)';
-const LOGO_ICON_SELECTOR = '.logo.icon';
-=======
 const LOGO_PARENT_CANDIDATES = ['[data-logo-parent]', '.logo-2'];
 const LOGO_WRAPPER_SELECTOR = '.logo-wrapper';
 const LOGO_FULL_FALLBACK_SELECTOR = '.logo:not(.icon)';
 const LOGO_ICON_FALLBACK_SELECTOR = '.logo.icon';
->>>>>>> a9beef3791b662ac93906ea69bd4e4d1cd669cd6
 
 const setCssVars = () => {
   if (!document.documentElement.style.getPropertyValue('--drawer-gap')) {
@@ -49,13 +43,6 @@ const getDrawer = () => document.querySelector<HTMLElement>(DRAWER_SELECTOR);
 const getCloseTrigger = () => document.querySelector<HTMLElement>(CLOSE_SELECTOR);
 
 const getLogoElements = () => {
-<<<<<<< HEAD
-  const parent = document.querySelector<HTMLElement>(LOGO_PARENT_SELECTOR);
-  // Find relative to the parent ensuring we get the correct elements
-  const full = document.querySelector<HTMLElement>(LOGO_FULL_SELECTOR);
-  const icon = document.querySelector<HTMLElement>(LOGO_ICON_SELECTOR);
-  return { parent, full, icon };
-=======
   const parent = LOGO_PARENT_CANDIDATES.reduce<HTMLElement | null>((found, selector) => {
     if (found) return found;
     return document.querySelector<HTMLElement>(selector);
@@ -82,7 +69,6 @@ const getLogoElements = () => {
   }
 
   return { parent, full: undefined, icon: undefined };
->>>>>>> a9beef3791b662ac93906ea69bd4e4d1cd669cd6
 };
 
 const getNamespace = (container?: Element | null) =>
@@ -570,6 +556,13 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
             nextContainer.style.transitionDuration = `${TRANSITION_DURATION}ms`;
             nextContainer.style.transitionTimingFunction = EASING;
             nextContainer.style.opacity = '1';
+          }
+        },
+        after: () => {
+          const drawer = getDrawer();
+          if (drawer) {
+            resetDrawerStylesForHome();
+            applyDrawerLayout(drawer, false);
           }
         },
       },

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import barba from '@barba/core';
 
 import { setNavVisible } from './nav';
@@ -27,9 +28,9 @@ const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const DRAWER_GAP = '5rem';
 const OFFSCREEN_TRANSLATE = 'calc(100vw - var(--drawer-gap, 5rem))';
 const BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
-const LOGO_PARENT_SELECTOR = '.logo';
-const LOGO_FULL_SELECTOR = '.logo > .logo-wrapper:first-child';
-const LOGO_ICON_SELECTOR = '.logo > .logo-wrapper:last-child';
+const LOGO_PARENT_SELECTOR = '.logo-wrapper';
+const LOGO_FULL_SELECTOR = '.logo:not(.icon)';
+const LOGO_ICON_SELECTOR = '.logo.icon';
 
 const setCssVars = () => {
   if (!document.documentElement.style.getPropertyValue('--drawer-gap')) {
@@ -42,9 +43,9 @@ const getCloseTrigger = () => document.querySelector<HTMLElement>(CLOSE_SELECTOR
 
 const getLogoElements = () => {
   const parent = document.querySelector<HTMLElement>(LOGO_PARENT_SELECTOR);
-  const wrappers = document.querySelectorAll<HTMLElement>(`${LOGO_PARENT_SELECTOR} .logo-wrapper`);
-  const full = wrappers[0] as HTMLElement | undefined;
-  const icon = wrappers[1] as HTMLElement | undefined;
+  // Find relative to the parent ensuring we get the correct elements
+  const full = document.querySelector<HTMLElement>(LOGO_FULL_SELECTOR);
+  const icon = document.querySelector<HTMLElement>(LOGO_ICON_SELECTOR);
   return { parent, full, icon };
 };
 
@@ -407,14 +408,14 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
 
   barba.init({
     preventRunning: true,
-    prevent: ({ el, href }) => shouldPrevent(el as HTMLElement | null, href),
+    prevent: ({ el, href }: any) => shouldPrevent(el as HTMLElement | null, href),
     transitions: [
       {
         name: 'home-to-peripheral',
         from: { namespace: ['home'] },
         to: { namespace: ['verkada', 'film', 'about', 'work'] },
         sync: true,
-        beforeEnter: ({ next }) => {
+        beforeEnter: ({ next }: any) => {
           const nextContainer = next.container as HTMLElement | null;
           if (!nextContainer) return;
           const drawer = getDrawer();
@@ -465,7 +466,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           placeContainerOffscreen(nextContainer);
           nextContainer.style.setProperty('opacity', '1', 'important');
         },
-        leave: async ({ current, next }) => {
+        leave: async ({ current, next }: any) => {
           onBeforeLeave?.();
           hideCurrentContainer(current?.container as HTMLElement | null);
           const nextContainer = next.container as HTMLElement | null;
@@ -475,7 +476,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
             nextContainer.style.setProperty('opacity', '1', 'important');
           }
         },
-        enter: async ({ next }) => {
+        enter: async ({ next }: any) => {
           const animations: Promise<void>[] = [];
           const nextContainer = next.container as HTMLElement | null;
           if (nextContainer) {
@@ -497,7 +498,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
         from: { namespace: ['verkada', 'film', 'about', 'work'] },
         to: { namespace: ['home'] },
         sync: true,
-        beforeEnter: ({ next }) => {
+        beforeEnter: ({ next }: any) => {
           const nextContainer = next.container as HTMLElement | null;
           if (!nextContainer) return;
           prepareContainer(nextContainer, false);
@@ -506,7 +507,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           nextContainer.style.opacity = '0';
           setCloseTriggerVisible(false);
         },
-        leave: async ({ current }) => {
+        leave: async ({ current }: any) => {
           onBeforeLeave?.();
           const animations: Promise<void>[] = [];
 
@@ -526,7 +527,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           }
           await Promise.all(animations);
         },
-        enter: async ({ next }) => {
+        enter: async ({ next }: any) => {
           const nextNs = getNamespace(next.container);
           document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
           setCloseTriggerVisible(false);
@@ -548,12 +549,12 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
     ],
   });
 
-  barba.hooks.beforeEnter((data) => {
+  barba.hooks.beforeEnter((data: any) => {
     updateBodyAttributes(data.next.html);
     window.scrollTo(0, 0);
   });
 
-  barba.hooks.afterEnter((data) => {
+  barba.hooks.afterEnter((data: any) => {
     const ns = getNamespace(data.next.container);
     document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(ns));
     setCloseTriggerVisible(isPeripheralNamespace(ns));

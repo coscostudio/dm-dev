@@ -28,9 +28,16 @@ const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const DRAWER_GAP = '5rem';
 const OFFSCREEN_TRANSLATE = 'calc(100vw - var(--drawer-gap, 5rem))';
 const BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
+<<<<<<< HEAD
 const LOGO_PARENT_SELECTOR = '.logo-wrapper';
 const LOGO_FULL_SELECTOR = '.logo:not(.icon)';
 const LOGO_ICON_SELECTOR = '.logo.icon';
+=======
+const LOGO_PARENT_CANDIDATES = ['[data-logo-parent]', '.logo-2'];
+const LOGO_WRAPPER_SELECTOR = '.logo-wrapper';
+const LOGO_FULL_FALLBACK_SELECTOR = '.logo:not(.icon)';
+const LOGO_ICON_FALLBACK_SELECTOR = '.logo.icon';
+>>>>>>> a9beef3791b662ac93906ea69bd4e4d1cd669cd6
 
 const setCssVars = () => {
   if (!document.documentElement.style.getPropertyValue('--drawer-gap')) {
@@ -42,11 +49,40 @@ const getDrawer = () => document.querySelector<HTMLElement>(DRAWER_SELECTOR);
 const getCloseTrigger = () => document.querySelector<HTMLElement>(CLOSE_SELECTOR);
 
 const getLogoElements = () => {
+<<<<<<< HEAD
   const parent = document.querySelector<HTMLElement>(LOGO_PARENT_SELECTOR);
   // Find relative to the parent ensuring we get the correct elements
   const full = document.querySelector<HTMLElement>(LOGO_FULL_SELECTOR);
   const icon = document.querySelector<HTMLElement>(LOGO_ICON_SELECTOR);
   return { parent, full, icon };
+=======
+  const parent = LOGO_PARENT_CANDIDATES.reduce<HTMLElement | null>((found, selector) => {
+    if (found) return found;
+    return document.querySelector<HTMLElement>(selector);
+  }, null);
+
+  if (!parent) {
+    return { parent: null, full: undefined, icon: undefined };
+  }
+
+  const wrappers = parent.querySelectorAll<HTMLElement>(LOGO_WRAPPER_SELECTOR);
+  if (wrappers.length >= 2) {
+    return {
+      parent,
+      full: wrappers[0] as HTMLElement,
+      icon: wrappers[1] as HTMLElement,
+    };
+  }
+
+  const fullEmbed = parent.querySelector<HTMLElement>(LOGO_FULL_FALLBACK_SELECTOR) ?? undefined;
+  const iconEmbed = parent.querySelector<HTMLElement>(LOGO_ICON_FALLBACK_SELECTOR) ?? undefined;
+
+  if (fullEmbed && iconEmbed) {
+    return { parent, full: fullEmbed, icon: iconEmbed };
+  }
+
+  return { parent, full: undefined, icon: undefined };
+>>>>>>> a9beef3791b662ac93906ea69bd4e4d1cd669cd6
 };
 
 const getNamespace = (container?: Element | null) =>
@@ -149,17 +185,11 @@ const ensureDrawerBaseStyles = () => {
 const setLogoState = (isPeripheral: boolean) => {
   const { parent, full, icon } = getLogoElements();
 
-  // Debug logging - moved before check
-  console.log('setLogoState check:', {
-    isPeripheral,
-    hasParent: !!parent,
-    hasFull: !!full,
-    hasIcon: !!icon,
-    parentSelector: LOGO_PARENT_SELECTOR,
-    foundWrappers: document.querySelectorAll(`${LOGO_PARENT_SELECTOR} .logo-wrapper`).length,
-  });
-
   if (!parent || !full || !icon) return;
+
+  if (window.getComputedStyle(parent).position === 'static') {
+    parent.style.setProperty('position', 'relative');
+  }
 
   const commonStyles = {
     position: 'absolute',
@@ -173,9 +203,6 @@ const setLogoState = (isPeripheral: boolean) => {
     transform: isPeripheral ? 'scale(0.8)' : 'scale(1)',
     pointerEvents: isPeripheral ? 'none' : 'auto',
   });
-
-  // Debug logging
-  console.log('setLogoState run:', { isPeripheral, full: !!full, icon: !!icon });
 
   // Force !important using setProperty since Object.assign doesn't support it directly
   full.style.setProperty('opacity', isPeripheral ? '0' : '1', 'important');

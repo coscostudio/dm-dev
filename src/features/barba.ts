@@ -431,50 +431,53 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
         beforeEnter: ({ next }: any) => {
           const nextContainer = next.container as HTMLElement | null;
           if (!nextContainer) return;
-          const drawer = getDrawer();
+
+          const drawers = document.querySelectorAll<HTMLElement>(DRAWER_SELECTOR);
+          let startWidth = 0;
+          let wasNavOpen = false;
+
+          // 1. Measure BEFORE changing any classes
+          if (drawers.length > 0) {
+            const sourceDrawer = drawers[0];
+            wasNavOpen =
+              document.body.classList.contains('is-nav-open') ||
+              sourceDrawer.classList.contains('is-nav-open');
+            startWidth = sourceDrawer.getBoundingClientRect().width;
+          }
+
+          // 2. Change Global State (Classes)
           animateLogo(true);
           const nextNs = getNamespace(next.container);
           document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
+          // Remove nav open classes immediately
+          document.body.classList.remove('is-nav-open');
+
           setCloseTriggerVisible(true);
           ensureDrawerBaseStyles();
-          if (drawer) {
-            // Check if Nav is open (prevent snapping)
-            const isNavOpen =
-              document.body.classList.contains('is-nav-open') ||
-              drawer.classList.contains('is-nav-open');
-            if (isNavOpen) {
-              const currentWidth = drawer.getBoundingClientRect().width;
-              // Lock current width immediately
-              drawer.style.setProperty('width', `${currentWidth}px`, 'important');
-              // Force reflow
+
+          // 3. Lock Drawers to Measured State
+          if (drawers.length > 0) {
+            drawers.forEach((drawer) => {
+              drawer.classList.remove('is-nav-open');
+              drawer.style.setProperty('position', 'fixed', 'important');
+              drawer.style.setProperty('top', '0', 'important');
+              drawer.style.setProperty('bottom', '0', 'important');
+              drawer.style.setProperty('right', '0', 'important');
+              drawer.style.setProperty('left', 'auto', 'important');
+
+              if (startWidth > 0) {
+                drawer.style.setProperty('width', `${startWidth}px`, 'important');
+              }
+
+              drawer.style.setProperty('max-width', 'none', 'important');
+              drawer.style.setProperty('transform', 'none', 'important');
+              drawer.style.setProperty('transition', 'none', 'important');
+
+              // Force Reflow
               void drawer.offsetWidth;
-            }
-
-            // Apply fixed layout, but skip setting the final calc width if we are animating it
-            applyDrawerLayout(drawer, true, isNavOpen);
-
-            // Now set up the transition
-            const prop = isNavOpen ? 'transform, width' : 'transform';
-            drawer.style.setProperty('transition-property', prop, 'important');
-            drawer.style.setProperty(
-              'transition-duration',
-              `${TRANSITION_DURATION}ms`,
-              'important'
-            );
-            drawer.style.setProperty('transition-timing-function', EASING, 'important');
-
-            if (isNavOpen) {
-              // Now set the target width to animate TO
-              requestAnimationFrame(() => {
-                drawer.style.setProperty(
-                  'width',
-                  `calc(100vw - var(--drawer-gap, ${DRAWER_GAP}))`,
-                  'important'
-                );
-              });
-            }
+            });
           }
-          setNavVisible(false);
+
           prepareContainer(nextContainer, true);
           placeContainerOffscreen(nextContainer);
           nextContainer.style.setProperty('opacity', '1', 'important');
@@ -495,15 +498,38 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           if (nextContainer) {
             animations.push(animateContainerTo(nextContainer, 'translateX(0)'));
           }
-          const drawer = getDrawer();
-          if (drawer) {
-            applyDrawerLayout(drawer, true);
-            animations.push(animateDrawer(true, true));
+
+          const drawers = document.querySelectorAll<HTMLElement>(DRAWER_SELECTOR);
+          if (drawers.length > 0) {
+            // --- FLIP Step 2: Play (Animate) ---
+            animations.push(
+              new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    drawers.forEach((drawer) => {
+                      // Enable Transition
+                      drawer.style.setProperty(
+                        'transition',
+                        `width ${TRANSITION_DURATION}ms ${EASING}, transform ${TRANSITION_DURATION}ms ${EASING}`,
+                        'important'
+                      );
+                      // Set Final State
+                      drawer.style.setProperty(
+                        'width',
+                        `calc(100vw - var(--drawer-gap, ${DRAWER_GAP}))`,
+                        'important'
+                      );
+                    });
+
+                    // Wait for the transition
+                    waitForTransition(drawers[0]).then(resolve);
+                  });
+                });
+              })
+            );
           }
           await Promise.all(animations);
-          if (drawer) {
-            setDrawerState(drawer, true, false, true);
-          }
+          // Cleanup handled by next transition or 'after' hooks
         },
       },
       {

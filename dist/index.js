@@ -1544,39 +1544,37 @@
           beforeEnter: ({ next }) => {
             const nextContainer = next.container;
             if (!nextContainer) return;
-            const drawer = getDrawer();
+            const drawers = document.querySelectorAll(DRAWER_SELECTOR);
+            let startWidth = 0;
+            let wasNavOpen = false;
+            if (drawers.length > 0) {
+              const sourceDrawer = drawers[0];
+              wasNavOpen = document.body.classList.contains("is-nav-open") || sourceDrawer.classList.contains("is-nav-open");
+              startWidth = sourceDrawer.getBoundingClientRect().width;
+            }
             animateLogo(true);
             const nextNs = getNamespace(next.container);
             document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
+            document.body.classList.remove("is-nav-open");
             setCloseTriggerVisible(true);
             ensureDrawerBaseStyles();
-            if (drawer) {
-              const isNavOpen = document.body.classList.contains("is-nav-open") || drawer.classList.contains("is-nav-open");
-              if (isNavOpen) {
-                const currentWidth = drawer.getBoundingClientRect().width;
-                drawer.style.setProperty("width", `${currentWidth}px`, "important");
+            if (drawers.length > 0) {
+              drawers.forEach((drawer) => {
+                drawer.classList.remove("is-nav-open");
+                drawer.style.setProperty("position", "fixed", "important");
+                drawer.style.setProperty("top", "0", "important");
+                drawer.style.setProperty("bottom", "0", "important");
+                drawer.style.setProperty("right", "0", "important");
+                drawer.style.setProperty("left", "auto", "important");
+                if (startWidth > 0) {
+                  drawer.style.setProperty("width", `${startWidth}px`, "important");
+                }
+                drawer.style.setProperty("max-width", "none", "important");
+                drawer.style.setProperty("transform", "none", "important");
+                drawer.style.setProperty("transition", "none", "important");
                 void drawer.offsetWidth;
-              }
-              applyDrawerLayout(drawer, true, isNavOpen);
-              const prop = isNavOpen ? "transform, width" : "transform";
-              drawer.style.setProperty("transition-property", prop, "important");
-              drawer.style.setProperty(
-                "transition-duration",
-                `${TRANSITION_DURATION}ms`,
-                "important"
-              );
-              drawer.style.setProperty("transition-timing-function", EASING, "important");
-              if (isNavOpen) {
-                requestAnimationFrame(() => {
-                  drawer.style.setProperty(
-                    "width",
-                    `calc(100vw - var(--drawer-gap, ${DRAWER_GAP}))`,
-                    "important"
-                  );
-                });
-              }
+              });
             }
-            setNavVisible(false);
             prepareContainer(nextContainer, true);
             placeContainerOffscreen(nextContainer);
             nextContainer.style.setProperty("opacity", "1", "important");
@@ -1597,15 +1595,31 @@
             if (nextContainer) {
               animations.push(animateContainerTo(nextContainer, "translateX(0)"));
             }
-            const drawer = getDrawer();
-            if (drawer) {
-              applyDrawerLayout(drawer, true);
-              animations.push(animateDrawer(true, true));
+            const drawers = document.querySelectorAll(DRAWER_SELECTOR);
+            if (drawers.length > 0) {
+              animations.push(
+                new Promise((resolve) => {
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                      drawers.forEach((drawer) => {
+                        drawer.style.setProperty(
+                          "transition",
+                          `width ${TRANSITION_DURATION}ms ${EASING}, transform ${TRANSITION_DURATION}ms ${EASING}`,
+                          "important"
+                        );
+                        drawer.style.setProperty(
+                          "width",
+                          `calc(100vw - var(--drawer-gap, ${DRAWER_GAP}))`,
+                          "important"
+                        );
+                      });
+                      waitForTransition(drawers[0]).then(resolve);
+                    });
+                  });
+                })
+              );
             }
             await Promise.all(animations);
-            if (drawer) {
-              setDrawerState(drawer, true, false, true);
-            }
           }
         },
         {

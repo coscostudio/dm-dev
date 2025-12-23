@@ -42,12 +42,14 @@ const LOGO_FULL_FALLBACK_SELECTOR = '.logo:not(.icon)';
 const LOGO_ICON_FALLBACK_SELECTOR = '.logo.icon';
 
 const setCssVars = () => {
-  const computedGap = window
-    .getComputedStyle(document.documentElement)
-    .getPropertyValue('--drawer-gap')
-    .trim();
+  const root = document.documentElement;
+  const computedGap = window.getComputedStyle(root).getPropertyValue('--drawer-gap').trim();
+  const baseGap = computedGap || DRAWER_GAP;
   if (!computedGap) {
-    document.documentElement.style.setProperty('--drawer-gap', DRAWER_GAP);
+    root.style.setProperty('--drawer-gap', DRAWER_GAP);
+  }
+  if (!root.dataset.drawerGapBase) {
+    root.dataset.drawerGapBase = baseGap;
   }
 };
 
@@ -83,21 +85,52 @@ const getBaseDrawerGap = () => {
   return root.dataset.drawerGapBase || DRAWER_GAP;
 };
 
-const getNavTransitionParts = () => {
-  const value = window
-    .getComputedStyle(document.documentElement)
-    .getPropertyValue('--nav-transition')
-    .trim();
-  const fallback = `${CLOSE_HOVER_DURATION}ms ${CLOSE_HOVER_EASING}`;
-  const source = value || fallback;
-  const match = source.match(/^(\d+(?:\.\d+)?m?s)\s*(.+)?$/);
+type NavTransitionParts = {
+  duration: string;
+  timing: string;
+  delay: string;
+  durationMs: number;
+  delayMs: number;
+};
+
+const parseTimeToMs = (value: string) => {
+  const match = value.trim().match(/^(-?\d+(?:\.\d+)?)(m?s)$/);
   if (!match) {
-    return { duration: `${CLOSE_HOVER_DURATION}ms`, timing: CLOSE_HOVER_EASING };
+    return null;
   }
+  const amount = Number.parseFloat(match[1]);
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+  return match[2] === 's' ? amount * 1000 : amount;
+};
+
+const getNavTransitionParts = (sourceElement?: Element | null): NavTransitionParts => {
+  const root = document.documentElement;
+  const readValue = (element: Element) =>
+    window.getComputedStyle(element).getPropertyValue('--nav-transition').trim();
+  const source = sourceElement ?? root;
+  let value = readValue(source);
+  if (!value && source !== root) {
+    value = readValue(root);
+  }
+  const fallback = `${CLOSE_HOVER_DURATION}ms ${CLOSE_HOVER_EASING}`;
+  const raw = value || fallback;
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  const timeTokens = tokens.filter((token) => /^-?\d+(?:\.\d+)?m?s$/.test(token));
+  const timingTokens = tokens.filter((token) => !/^-?\d+(?:\.\d+)?m?s$/.test(token));
+  const duration = timeTokens[0] || `${CLOSE_HOVER_DURATION}ms`;
+  const delay = timeTokens[1] || '0ms';
+  const timing = timingTokens.join(' ').trim() || CLOSE_HOVER_EASING;
+  const durationMs = parseTimeToMs(duration) ?? CLOSE_HOVER_DURATION;
+  const delayMs = parseTimeToMs(delay) ?? 0;
 
   return {
-    duration: match[1],
-    timing: (match[2] || CLOSE_HOVER_EASING).trim(),
+    duration,
+    timing,
+    delay,
+    durationMs,
+    delayMs,
   };
 };
 
@@ -143,10 +176,14 @@ const restoreHoverTransition = (element: HTMLElement) => {
   closeHoverTransitions.delete(element);
 };
 
-const applyHoverTransition = (element: HTMLElement, properties: string[]) => {
+const applyHoverTransition = (
+  element: HTMLElement,
+  properties: string[],
+  transition: NavTransitionParts
+) => {
   cacheHoverTransition(element);
   const computed = window.getComputedStyle(element);
-  const { duration, timing } = getNavTransitionParts();
+  const { duration, timing, delay } = transition;
   const baseProperties = computed.transitionProperty
     .split(',')
     .map((prop) => prop.trim())
@@ -165,7 +202,7 @@ const applyHoverTransition = (element: HTMLElement, properties: string[]) => {
   );
   element.style.setProperty('transition-duration', duration, 'important');
   element.style.setProperty('transition-timing-function', timing, 'important');
-  element.style.setProperty('transition-delay', '0ms', 'important');
+  element.style.setProperty('transition-delay', delay, 'important');
 };
 
 const getDrawerRevealOffset = (drawerWidth: number) => {
@@ -566,7 +603,8 @@ const applyCloseHoverState = (isHovering: boolean) => {
   const close = getCloseTrigger();
   const baseGap = getBaseDrawerGap();
   const nextGap = isHovering ? `calc(${baseGap} + ${CLOSE_HOVER_SHIFT})` : baseGap;
-  document.documentElement.style.setProperty('--drawer-gap', nextGap);
+  const transitionSource = close || drawer || container || document.documentElement;
+  const navTransition = getNavTransitionParts(transitionSource);
 
   const transitionTargets = [
     { element: drawer, properties: ['width'] },
@@ -585,15 +623,21 @@ const applyCloseHoverState = (isHovering: boolean) => {
       closeHoverTimeouts.delete(element);
     }
 
-    applyHoverTransition(element, properties);
+    applyHoverTransition(element, properties, navTransition);
 
     if (!isHovering) {
       const timeoutId = window.setTimeout(() => {
         restoreHoverTransition(element);
-      }, CLOSE_HOVER_DURATION + 40);
+      }, navTransition.durationMs + navTransition.delayMs + 40);
       closeHoverTimeouts.set(element, timeoutId);
     }
   });
+
+  const reflowTarget = drawer || container || close;
+  if (reflowTarget) {
+    void reflowTarget.offsetWidth;
+  }
+  document.documentElement.style.setProperty('--drawer-gap', nextGap);
 };
 
 const initCloseHover = (close: HTMLElement) => {

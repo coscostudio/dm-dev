@@ -1232,6 +1232,7 @@
   var CLOSE_HOVER_SHIFT = "1.25rem";
   var CLOSE_HOVER_DURATION = 200;
   var CLOSE_HOVER_EASING = "cubic-bezier(0.22, 1.2, 0.36, 1)";
+  var LOOP_SLIDER_SNAP_ATTR = "data-loop-slider-snap";
   var PROJECT_SHADOW_FALLBACK = "0 5px 15px 0 rgba(0, 0, 0, 0.35), -25px 0 50px -12px rgba(0, 0, 0, 0.25)";
   var OFFSCREEN_TRANSLATE = "calc(100vw - var(--drawer-gap, 5rem))";
   var BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
@@ -1248,6 +1249,17 @@
     }
     if (!root.dataset.drawerGapBase) {
       root.dataset.drawerGapBase = baseGap;
+    }
+  };
+  var setHorizontalOverflowLock = (lock) => {
+    const root = document.documentElement;
+    const body = document.body;
+    if (lock) {
+      root.style.setProperty("overflow-x", "hidden");
+      body.style.setProperty("overflow-x", "hidden");
+    } else {
+      root.style.removeProperty("overflow-x");
+      body.style.removeProperty("overflow-x");
     }
   };
   var getDrawer = () => document.querySelector(DRAWER_SELECTOR);
@@ -1784,6 +1796,7 @@
     setCloseTriggerVisible(isPeripheral);
     setLogoState(isPeripheral);
     resetNavContainerStyles();
+    setHorizontalOverflowLock(!isPeripheral);
     if (drawer) {
       if (isPeripheral) {
         ensureDrawerBaseStyles();
@@ -1915,6 +1928,7 @@
           beforeEnter: ({ next }) => {
             const nextContainer = next.container;
             if (!nextContainer) return;
+            setHorizontalOverflowLock(true);
             prepareContainer(nextContainer, false);
             nextContainer.style.transition = "none";
             nextContainer.style.transform = "translateX(0)";
@@ -1974,8 +1988,16 @@
     });
     import_core.default.hooks.afterEnter((data) => {
       const ns = getNamespace(data.next.container);
+      const prevNs = getNamespace(data.current?.container);
+      const shouldSnapLoopSlider = ns === "home" && isPeripheralNamespace(prevNs);
+      if (shouldSnapLoopSlider) {
+        document.body.setAttribute(LOOP_SLIDER_SNAP_ATTR, "true");
+      } else {
+        document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR);
+      }
       document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(ns));
       setCloseTriggerVisible(isPeripheralNamespace(ns));
+      setHorizontalOverflowLock(!isPeripheralNamespace(ns));
       reinitializeWebflow();
       onAfterEnter();
       if (ns === "home") {
@@ -3087,6 +3109,7 @@
   };
   var LENIS_STYLE_ID = "loop-slider-lenis-styles";
   var LENIS_STYLES = "html.lenis,html.lenis body{height:auto}.lenis:not(.lenis-autoToggle).lenis-stopped{overflow:clip}.lenis [data-lenis-prevent],.lenis [data-lenis-prevent-wheel],.lenis [data-lenis-prevent-touch]{overscroll-behavior:contain}.lenis.lenis-smooth iframe{pointer-events:none}.lenis.lenis-autoToggle{transition-property:overflow;transition-duration:1ms;transition-behavior:allow-discrete}";
+  var LOOP_SLIDER_SNAP_ATTR2 = "data-loop-slider-snap";
   var sliderAnimationFrame = null;
   var sliderScrollListenerAttached = false;
   var sliderResizeListenerAttached = false;
@@ -3231,6 +3254,19 @@
         content.style.position = content.style.position || "relative";
       });
     }
+    applySlideStyles(slide) {
+      const opacity = this.config.minOpacity + (1 - this.config.minOpacity) * slide.progress;
+      const blurValue = (1 - slide.progress) * this.config.blurMax;
+      slide.contentNode.style.transform = `scale(${slide.scale.toFixed(4)})`;
+      slide.contentNode.style.opacity = opacity.toFixed(3);
+      slide.focusNodes.forEach((target) => {
+        target.style.filter = `blur(${blurValue.toFixed(2)}px)`;
+      });
+      if (slide.blurNode) {
+        slide.blurNode.style.opacity = (1 - slide.progress).toFixed(3);
+        slide.blurNode.style.filter = `blur(${Math.max(blurValue, this.config.blurMax * 0.6).toFixed(2)}px)`;
+      }
+    }
     prepareLoopLists(track) {
       this.loopLists = queryAllWithFallback(track, LOOP_SLIDER_SELECTORS.loop);
       if (!this.loopLists.length) {
@@ -3348,17 +3384,17 @@
       this.slides.forEach((slide) => {
         slide.scale += (slide.targetScale - slide.scale) * this.config.lerp;
         slide.progress += (slide.targetProgress - slide.progress) * this.config.progressLerp;
-        const opacity = this.config.minOpacity + (1 - this.config.minOpacity) * slide.progress;
-        const blurValue = (1 - slide.progress) * this.config.blurMax;
-        slide.contentNode.style.transform = `scale(${slide.scale.toFixed(4)})`;
-        slide.contentNode.style.opacity = opacity.toFixed(3);
-        slide.focusNodes.forEach((target) => {
-          target.style.filter = `blur(${blurValue.toFixed(2)}px)`;
-        });
-        if (slide.blurNode) {
-          slide.blurNode.style.opacity = (1 - slide.progress).toFixed(3);
-          slide.blurNode.style.filter = `blur(${Math.max(blurValue, this.config.blurMax * 0.6).toFixed(2)}px)`;
-        }
+        this.applySlideStyles(slide);
+      });
+    }
+    syncToTargets() {
+      if (!this.slides.length) {
+        return;
+      }
+      this.slides.forEach((slide) => {
+        slide.scale = slide.targetScale;
+        slide.progress = slide.targetProgress;
+        this.applySlideStyles(slide);
       });
     }
   };
@@ -3412,12 +3448,19 @@
     loopSliderInstances.length = 0;
   };
   var initLoopSlider = () => {
+    const shouldSnap = document.body.hasAttribute(LOOP_SLIDER_SNAP_ATTR2);
     const sliderRoots = getLoopSliderRoots();
     if (!sliderRoots.length) {
+      if (shouldSnap) {
+        document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR2);
+      }
       return;
     }
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (prefersReducedMotion.matches) {
+      if (shouldSnap) {
+        document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR2);
+      }
       return;
     }
     const instances = sliderRoots.map((root) => {
@@ -3435,6 +3478,10 @@
     attachNativeScrollListener();
     attachResizeListener();
     triggerSliderMeasurements();
+    if (shouldSnap) {
+      instances.forEach((instance) => instance.syncToTargets());
+      document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR2);
+    }
     startSliderAnimationLoop();
   };
 

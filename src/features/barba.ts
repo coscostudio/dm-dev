@@ -32,6 +32,7 @@ const NAV_FADE_TRANSLATE = '0.5rem';
 const CLOSE_HOVER_SHIFT = '1.25rem';
 const CLOSE_HOVER_DURATION = 200;
 const CLOSE_HOVER_EASING = 'cubic-bezier(0.22, 1.2, 0.36, 1)';
+const LOOP_SLIDER_SNAP_ATTR = 'data-loop-slider-snap';
 const PROJECT_SHADOW_FALLBACK =
   '0 5px 15px 0 rgba(0, 0, 0, 0.35), -25px 0 50px -12px rgba(0, 0, 0, 0.25)';
 const OFFSCREEN_TRANSLATE = 'calc(100vw - var(--drawer-gap, 5rem))';
@@ -50,6 +51,18 @@ const setCssVars = () => {
   }
   if (!root.dataset.drawerGapBase) {
     root.dataset.drawerGapBase = baseGap;
+  }
+};
+
+const setHorizontalOverflowLock = (lock: boolean) => {
+  const root = document.documentElement;
+  const body = document.body;
+  if (lock) {
+    root.style.setProperty('overflow-x', 'hidden');
+    body.style.setProperty('overflow-x', 'hidden');
+  } else {
+    root.style.removeProperty('overflow-x');
+    body.style.removeProperty('overflow-x');
   }
 };
 
@@ -745,6 +758,7 @@ const syncInitialState = () => {
   setCloseTriggerVisible(isPeripheral);
   setLogoState(isPeripheral);
   resetNavContainerStyles();
+  setHorizontalOverflowLock(!isPeripheral);
 
   if (drawer) {
     if (isPeripheral) {
@@ -904,6 +918,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
         beforeEnter: ({ next }: any) => {
           const nextContainer = next.container as HTMLElement | null;
           if (!nextContainer) return;
+          setHorizontalOverflowLock(true);
           prepareContainer(nextContainer, false);
           nextContainer.style.transition = 'none';
           nextContainer.style.transform = 'translateX(0)';
@@ -967,8 +982,16 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
 
   barba.hooks.afterEnter((data: any) => {
     const ns = getNamespace(data.next.container);
+    const prevNs = getNamespace(data.current?.container);
+    const shouldSnapLoopSlider = ns === 'home' && isPeripheralNamespace(prevNs);
+    if (shouldSnapLoopSlider) {
+      document.body.setAttribute(LOOP_SLIDER_SNAP_ATTR, 'true');
+    } else {
+      document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR);
+    }
     document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(ns));
     setCloseTriggerVisible(isPeripheralNamespace(ns));
+    setHorizontalOverflowLock(!isPeripheralNamespace(ns));
     reinitializeWebflow();
     onAfterEnter();
     if (ns === 'home') {

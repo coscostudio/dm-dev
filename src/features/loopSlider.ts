@@ -35,6 +35,7 @@ type SlideState = {
 const LENIS_STYLE_ID = 'loop-slider-lenis-styles';
 const LENIS_STYLES =
   'html.lenis,html.lenis body{height:auto}.lenis:not(.lenis-autoToggle).lenis-stopped{overflow:clip}.lenis [data-lenis-prevent],.lenis [data-lenis-prevent-wheel],.lenis [data-lenis-prevent-touch]{overscroll-behavior:contain}.lenis.lenis-smooth iframe{pointer-events:none}.lenis.lenis-autoToggle{transition-property:overflow;transition-duration:1ms;transition-behavior:allow-discrete}';
+const LOOP_SLIDER_SNAP_ATTR = 'data-loop-slider-snap';
 
 let sliderAnimationFrame: number | null = null;
 let sliderScrollListenerAttached = false;
@@ -217,6 +218,23 @@ class LoopSliderInstance {
     });
   }
 
+  private applySlideStyles(slide: SlideState) {
+    const opacity = this.config.minOpacity + (1 - this.config.minOpacity) * slide.progress;
+    const blurValue = (1 - slide.progress) * this.config.blurMax;
+
+    slide.contentNode.style.transform = `scale(${slide.scale.toFixed(4)})`;
+    slide.contentNode.style.opacity = opacity.toFixed(3);
+
+    slide.focusNodes.forEach((target) => {
+      target.style.filter = `blur(${blurValue.toFixed(2)}px)`;
+    });
+
+    if (slide.blurNode) {
+      slide.blurNode.style.opacity = (1 - slide.progress).toFixed(3);
+      slide.blurNode.style.filter = `blur(${Math.max(blurValue, this.config.blurMax * 0.6).toFixed(2)}px)`;
+    }
+  }
+
   private prepareLoopLists(track: HTMLElement) {
     this.loopLists = queryAllWithFallback<HTMLElement>(track, LOOP_SLIDER_SELECTORS.loop);
 
@@ -365,20 +383,19 @@ class LoopSliderInstance {
     this.slides.forEach((slide) => {
       slide.scale += (slide.targetScale - slide.scale) * this.config.lerp;
       slide.progress += (slide.targetProgress - slide.progress) * this.config.progressLerp;
-      const opacity = this.config.minOpacity + (1 - this.config.minOpacity) * slide.progress;
-      const blurValue = (1 - slide.progress) * this.config.blurMax;
+      this.applySlideStyles(slide);
+    });
+  }
 
-      slide.contentNode.style.transform = `scale(${slide.scale.toFixed(4)})`;
-      slide.contentNode.style.opacity = opacity.toFixed(3);
+  public syncToTargets() {
+    if (!this.slides.length) {
+      return;
+    }
 
-      slide.focusNodes.forEach((target) => {
-        target.style.filter = `blur(${blurValue.toFixed(2)}px)`;
-      });
-
-      if (slide.blurNode) {
-        slide.blurNode.style.opacity = (1 - slide.progress).toFixed(3);
-        slide.blurNode.style.filter = `blur(${Math.max(blurValue, this.config.blurMax * 0.6).toFixed(2)}px)`;
-      }
+    this.slides.forEach((slide) => {
+      slide.scale = slide.targetScale;
+      slide.progress = slide.targetProgress;
+      this.applySlideStyles(slide);
     });
   }
 }
@@ -447,15 +464,22 @@ export const destroyLoopSlider = () => {
 };
 
 export const initLoopSlider = () => {
+  const shouldSnap = document.body.hasAttribute(LOOP_SLIDER_SNAP_ATTR);
   const sliderRoots = getLoopSliderRoots();
 
   if (!sliderRoots.length) {
+    if (shouldSnap) {
+      document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR);
+    }
     return;
   }
 
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   if (prefersReducedMotion.matches) {
+    if (shouldSnap) {
+      document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR);
+    }
     return;
   }
 
@@ -480,5 +504,9 @@ export const initLoopSlider = () => {
   attachResizeListener();
 
   triggerSliderMeasurements();
+  if (shouldSnap) {
+    instances.forEach((instance) => instance.syncToTargets());
+    document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR);
+  }
   startSliderAnimationLoop();
 };

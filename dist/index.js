@@ -1036,6 +1036,7 @@
   var SELECTORS = {
     wrapper: '[data-nav="wrapper"]',
     drawer: ".drawer",
+    container: ".nav-container",
     toggle: '[data-nav="toggle"]',
     links: '[data-nav="links"] .nav-link',
     openIcon: '[data-nav-icon="open"]',
@@ -1070,12 +1071,11 @@
     closeIcon.hidden = true;
   };
   var setNavVisible = (isVisible) => {
-    const elements = getNavElements();
-    if (!elements) return;
-    const { wrapper } = elements;
-    wrapper.style.opacity = isVisible ? "1" : "0";
-    wrapper.style.pointerEvents = isVisible ? "" : "none";
-    wrapper.style.visibility = isVisible ? "" : "hidden";
+    const navContainer = document.querySelector(SELECTORS.container);
+    if (!navContainer) return;
+    navContainer.style.opacity = isVisible ? "1" : "0";
+    navContainer.style.pointerEvents = isVisible ? "" : "none";
+    navContainer.style.visibility = isVisible ? "" : "hidden";
   };
   var initNavInteractions = () => {
     const elements = getNavElements();
@@ -1220,12 +1220,15 @@
   // src/features/barba.ts
   var BARBA_WRAPPER_SELECTOR = '[data-barba="wrapper"]';
   var DRAWER_SELECTOR = '.drawer, [data-nav="wrapper"]';
+  var NAV_CONTAINER_SELECTOR = ".nav-container";
   var CLOSE_SELECTOR = '[data-nav="close-project"]';
   var DRAWER_OPEN_CLASS = "is-drawer-open";
   var PERIPHERAL_BODY_CLASS = "is-in-peripheral";
   var TRANSITION_DURATION = 700;
   var EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
   var DRAWER_GAP = "5rem";
+  var NAV_FADE_SCALE = 0.96;
+  var NAV_FADE_TRANSLATE = "0.5rem";
   var OFFSCREEN_TRANSLATE = "calc(100vw - var(--drawer-gap, 5rem))";
   var BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
   var LOGO_PARENT_CANDIDATES = ["[data-logo-parent]", ".logo-2"];
@@ -1239,6 +1242,18 @@
   };
   var getDrawer = () => document.querySelector(DRAWER_SELECTOR);
   var getCloseTrigger = () => document.querySelector(CLOSE_SELECTOR);
+  var getNavContainers = () => Array.from(document.querySelectorAll(NAV_CONTAINER_SELECTOR));
+  var getDrawerRevealOffset = (drawerWidth) => {
+    if (!Number.isFinite(drawerWidth) || drawerWidth <= 0) {
+      return OFFSCREEN_TRANSLATE;
+    }
+    const gapValue = window.getComputedStyle(document.documentElement).getPropertyValue("--drawer-gap").trim();
+    const gap = Number.parseFloat(gapValue);
+    const gapPx = Number.isFinite(gap) ? gap : 0;
+    const fullWidth = window.innerWidth - gapPx;
+    const offset = Math.max(0, fullWidth - drawerWidth);
+    return `${offset}px`;
+  };
   var getLogoElements = () => {
     const parent = LOGO_PARENT_CANDIDATES.reduce((found, selector) => {
       if (found) return found;
@@ -1333,6 +1348,54 @@
     drawer.style.willChange = drawer.style.willChange || "transform";
     drawer.style.transitionProperty = drawer.style.transitionProperty || "transform";
   };
+  var prepareNavContainersForFade = (containers, forceImportant = false) => {
+    if (containers.length === 0) {
+      return;
+    }
+    const priority = forceImportant ? "important" : "";
+    containers.forEach((container) => {
+      container.style.setProperty("transition", "none", priority);
+      container.style.setProperty("opacity", "1", priority);
+      container.style.setProperty("transform", "translateX(0) scale(1)", priority);
+      container.style.setProperty("will-change", "opacity, transform", priority);
+      container.style.setProperty("pointer-events", "auto", priority);
+    });
+    void containers[0].offsetWidth;
+  };
+  var animateNavContainersOut = (containers, forceImportant = false) => new Promise((resolve) => {
+    if (containers.length === 0) {
+      resolve();
+      return;
+    }
+    const priority = forceImportant ? "important" : "";
+    requestAnimationFrame(() => {
+      containers.forEach((container) => {
+        container.style.setProperty(
+          "transition",
+          `opacity ${TRANSITION_DURATION}ms ${EASING}, transform ${TRANSITION_DURATION}ms ${EASING}`,
+          priority
+        );
+        container.style.setProperty("opacity", "0", priority);
+        container.style.setProperty(
+          "transform",
+          `translateX(${NAV_FADE_TRANSLATE}) scale(${NAV_FADE_SCALE})`,
+          priority
+        );
+        container.style.setProperty("pointer-events", "none", priority);
+      });
+      waitForTransition(containers[0]).then(resolve);
+    });
+  });
+  var resetNavContainerStyles = () => {
+    const navContainers = getNavContainers();
+    navContainers.forEach((container) => {
+      container.style.removeProperty("opacity");
+      container.style.removeProperty("transform");
+      container.style.removeProperty("transition");
+      container.style.removeProperty("will-change");
+      container.style.removeProperty("pointer-events");
+    });
+  };
   var setLogoState = (isPeripheral) => {
     const { parent, full, icon } = getLogoElements();
     if (!parent || !full || !icon) return;
@@ -1411,6 +1474,7 @@
     }
     drawer.classList.remove(DRAWER_OPEN_CLASS);
     drawer.style.removeProperty("transform");
+    drawer.style.removeProperty("transition");
     drawer.style.removeProperty("transition-property");
     drawer.style.removeProperty("transition-duration");
     drawer.style.removeProperty("transition-timing-function");
@@ -1477,12 +1541,12 @@
     style.willChange = "transform, opacity";
     style.zIndex = isPeripheral ? "20" : "0";
   };
-  var placeContainerOffscreen = (container) => {
+  var placeContainerOffscreen = (container, translateX = OFFSCREEN_TRANSLATE) => {
     const { style } = container;
     style.setProperty("transition", "none", "important");
-    style.setProperty("transform", `translateX(${OFFSCREEN_TRANSLATE})`, "important");
+    style.setProperty("transform", `translateX(${translateX})`, "important");
   };
-  var animateContainerTo = async (container, translateX) => {
+  var animateContainerTo = async (container, translateX, opacity) => {
     const { style } = container;
     style.setProperty("will-change", "transform, opacity");
     void container.getBoundingClientRect();
@@ -1492,6 +1556,9 @@
         style.setProperty("transition-duration", `${TRANSITION_DURATION}ms`, "important");
         style.setProperty("transition-timing-function", EASING, "important");
         style.setProperty("transform", translateX, "important");
+        if (opacity !== void 0) {
+          style.setProperty("opacity", opacity, "important");
+        }
         waitForTransition(container).then(resolve);
       });
     });
@@ -1509,6 +1576,7 @@
     document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheral);
     setCloseTriggerVisible(isPeripheral);
     setLogoState(isPeripheral);
+    resetNavContainerStyles();
     if (drawer) {
       if (isPeripheral) {
         ensureDrawerBaseStyles();
@@ -1545,12 +1613,15 @@
             const nextContainer = next.container;
             if (!nextContainer) return;
             const drawers = document.querySelectorAll(DRAWER_SELECTOR);
+            const navContainers = getNavContainers();
             let startWidth = 0;
             let wasNavOpen = false;
+            let revealOffset = OFFSCREEN_TRANSLATE;
             if (drawers.length > 0) {
               const sourceDrawer = drawers[0];
               wasNavOpen = document.body.classList.contains("is-nav-open") || sourceDrawer.classList.contains("is-nav-open");
               startWidth = sourceDrawer.getBoundingClientRect().width;
+              revealOffset = getDrawerRevealOffset(startWidth);
             }
             animateLogo(true);
             const nextNs = getNamespace(next.container);
@@ -1575,25 +1646,28 @@
                 void drawer.offsetWidth;
               });
             }
+            prepareNavContainersForFade(navContainers, true);
             prepareContainer(nextContainer, true);
-            placeContainerOffscreen(nextContainer);
-            nextContainer.style.setProperty("opacity", "1", "important");
+            placeContainerOffscreen(nextContainer, revealOffset);
+            nextContainer.style.setProperty("opacity", "0", "important");
           },
           leave: async ({ current, next }) => {
             onBeforeLeave?.();
             hideCurrentContainer(current?.container);
             const nextContainer = next.container;
             if (nextContainer) {
+              const drawers = document.querySelectorAll(DRAWER_SELECTOR);
+              const drawerWidth = drawers[0]?.getBoundingClientRect().width ?? 0;
               prepareContainer(nextContainer, true);
-              placeContainerOffscreen(nextContainer);
-              nextContainer.style.setProperty("opacity", "1", "important");
+              placeContainerOffscreen(nextContainer, getDrawerRevealOffset(drawerWidth));
+              nextContainer.style.setProperty("opacity", "0", "important");
             }
           },
           enter: async ({ next }) => {
             const animations = [];
             const nextContainer = next.container;
             if (nextContainer) {
-              animations.push(animateContainerTo(nextContainer, "translateX(0)"));
+              animations.push(animateContainerTo(nextContainer, "translateX(0)", "1"));
             }
             const drawers = document.querySelectorAll(DRAWER_SELECTOR);
             if (drawers.length > 0) {
@@ -1618,6 +1692,10 @@
                   });
                 })
               );
+            }
+            const navContainers = getNavContainers();
+            if (navContainers.length > 0) {
+              animations.push(animateNavContainersOut(navContainers, true));
             }
             await Promise.all(animations);
           }
@@ -1659,6 +1737,7 @@
             document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
             setCloseTriggerVisible(false);
             setNavVisible(true);
+            resetNavContainerStyles();
             const drawer = getDrawer();
             if (drawer) {
               resetDrawerStylesForHome();

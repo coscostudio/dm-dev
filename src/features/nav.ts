@@ -1,6 +1,7 @@
 const SELECTORS = {
   wrapper: '[data-nav="wrapper"]',
   drawer: '.drawer',
+  container: '.nav-container',
   toggle: '[data-nav="toggle"]',
   links: '[data-nav="links"] .nav-link',
   openIcon: '[data-nav-icon="open"]',
@@ -55,13 +56,12 @@ export const forceCloseNav = () => {
 };
 
 export const setNavVisible = (isVisible: boolean) => {
-  const elements = getNavElements();
-  if (!elements) return;
+  const navContainer = document.querySelector<HTMLElement>(SELECTORS.container);
+  if (!navContainer) return;
 
-  const { wrapper } = elements;
-  wrapper.style.opacity = isVisible ? '1' : '0';
-  wrapper.style.pointerEvents = isVisible ? '' : 'none';
-  wrapper.style.visibility = isVisible ? '' : 'hidden'; // Ensure it doesn't block clicks when hidden
+  navContainer.style.opacity = isVisible ? '1' : '0';
+  navContainer.style.pointerEvents = isVisible ? '' : 'none';
+  navContainer.style.visibility = isVisible ? '' : 'hidden'; // Ensure it doesn't block clicks when hidden
 };
 
 export const initNavInteractions = (): NavCleanup | null => {

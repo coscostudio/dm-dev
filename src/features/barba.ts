@@ -20,12 +20,15 @@ declare global {
 
 const BARBA_WRAPPER_SELECTOR = '[data-barba="wrapper"]';
 const DRAWER_SELECTOR = '.drawer, [data-nav="wrapper"]';
+const NAV_CONTAINER_SELECTOR = '.nav-container';
 const CLOSE_SELECTOR = '[data-nav="close-project"]';
 const DRAWER_OPEN_CLASS = 'is-drawer-open';
 const PERIPHERAL_BODY_CLASS = 'is-in-peripheral';
 const TRANSITION_DURATION = 700;
 const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const DRAWER_GAP = '5rem';
+const NAV_FADE_SCALE = 0.96;
+const NAV_FADE_TRANSLATE = '0.5rem';
 const OFFSCREEN_TRANSLATE = 'calc(100vw - var(--drawer-gap, 5rem))';
 const BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
 const LOGO_PARENT_CANDIDATES = ['[data-logo-parent]', '.logo-2'];
@@ -41,6 +44,25 @@ const setCssVars = () => {
 
 const getDrawer = () => document.querySelector<HTMLElement>(DRAWER_SELECTOR);
 const getCloseTrigger = () => document.querySelector<HTMLElement>(CLOSE_SELECTOR);
+const getNavContainers = () =>
+  Array.from(document.querySelectorAll<HTMLElement>(NAV_CONTAINER_SELECTOR));
+
+const getDrawerRevealOffset = (drawerWidth: number) => {
+  if (!Number.isFinite(drawerWidth) || drawerWidth <= 0) {
+    return OFFSCREEN_TRANSLATE;
+  }
+
+  const gapValue = window
+    .getComputedStyle(document.documentElement)
+    .getPropertyValue('--drawer-gap')
+    .trim();
+  const gap = Number.parseFloat(gapValue);
+  const gapPx = Number.isFinite(gap) ? gap : 0;
+  const fullWidth = window.innerWidth - gapPx;
+  const offset = Math.max(0, fullWidth - drawerWidth);
+
+  return `${offset}px`;
+};
 
 const getLogoElements = () => {
   const parent = LOGO_PARENT_CANDIDATES.reduce<HTMLElement | null>((found, selector) => {
@@ -168,6 +190,61 @@ const ensureDrawerBaseStyles = () => {
   drawer.style.transitionProperty = drawer.style.transitionProperty || 'transform';
 };
 
+const prepareNavContainersForFade = (containers: HTMLElement[], forceImportant = false) => {
+  if (containers.length === 0) {
+    return;
+  }
+
+  const priority = forceImportant ? 'important' : '';
+  containers.forEach((container) => {
+    container.style.setProperty('transition', 'none', priority);
+    container.style.setProperty('opacity', '1', priority);
+    container.style.setProperty('transform', 'translateX(0) scale(1)', priority);
+    container.style.setProperty('will-change', 'opacity, transform', priority);
+    container.style.setProperty('pointer-events', 'auto', priority);
+  });
+
+  void containers[0].offsetWidth;
+};
+
+const animateNavContainersOut = (containers: HTMLElement[], forceImportant = false) =>
+  new Promise<void>((resolve) => {
+    if (containers.length === 0) {
+      resolve();
+      return;
+    }
+
+    const priority = forceImportant ? 'important' : '';
+    requestAnimationFrame(() => {
+      containers.forEach((container) => {
+        container.style.setProperty(
+          'transition',
+          `opacity ${TRANSITION_DURATION}ms ${EASING}, transform ${TRANSITION_DURATION}ms ${EASING}`,
+          priority
+        );
+        container.style.setProperty('opacity', '0', priority);
+        container.style.setProperty(
+          'transform',
+          `translateX(${NAV_FADE_TRANSLATE}) scale(${NAV_FADE_SCALE})`,
+          priority
+        );
+        container.style.setProperty('pointer-events', 'none', priority);
+      });
+      waitForTransition(containers[0]).then(resolve);
+    });
+  });
+
+const resetNavContainerStyles = () => {
+  const navContainers = getNavContainers();
+  navContainers.forEach((container) => {
+    container.style.removeProperty('opacity');
+    container.style.removeProperty('transform');
+    container.style.removeProperty('transition');
+    container.style.removeProperty('will-change');
+    container.style.removeProperty('pointer-events');
+  });
+};
+
 const setLogoState = (isPeripheral: boolean) => {
   const { parent, full, icon } = getLogoElements();
 
@@ -264,6 +341,7 @@ const resetDrawerStylesForHome = () => {
 
   drawer.classList.remove(DRAWER_OPEN_CLASS);
   drawer.style.removeProperty('transform');
+  drawer.style.removeProperty('transition');
   drawer.style.removeProperty('transition-property');
   drawer.style.removeProperty('transition-duration');
   drawer.style.removeProperty('transition-timing-function');
@@ -354,13 +432,17 @@ const prepareContainer = (container: HTMLElement, isPeripheral: boolean) => {
   style.zIndex = isPeripheral ? '20' : '0';
 };
 
-const placeContainerOffscreen = (container: HTMLElement) => {
+const placeContainerOffscreen = (container: HTMLElement, translateX = OFFSCREEN_TRANSLATE) => {
   const { style } = container;
   style.setProperty('transition', 'none', 'important');
-  style.setProperty('transform', `translateX(${OFFSCREEN_TRANSLATE})`, 'important');
+  style.setProperty('transform', `translateX(${translateX})`, 'important');
 };
 
-const animateContainerTo = async (container: HTMLElement, translateX: string) => {
+const animateContainerTo = async (
+  container: HTMLElement,
+  translateX: string,
+  opacity?: string
+) => {
   const { style } = container;
   style.setProperty('will-change', 'transform, opacity');
   // force a reflow to ensure the previous transform sticks before animating
@@ -371,6 +453,9 @@ const animateContainerTo = async (container: HTMLElement, translateX: string) =>
       style.setProperty('transition-duration', `${TRANSITION_DURATION}ms`, 'important');
       style.setProperty('transition-timing-function', EASING, 'important');
       style.setProperty('transform', translateX, 'important');
+      if (opacity !== undefined) {
+        style.setProperty('opacity', opacity, 'important');
+      }
       waitForTransition(container).then(resolve);
     });
   });
@@ -391,6 +476,7 @@ const syncInitialState = () => {
   document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheral);
   setCloseTriggerVisible(isPeripheral);
   setLogoState(isPeripheral);
+  resetNavContainerStyles();
 
   if (drawer) {
     if (isPeripheral) {
@@ -433,8 +519,10 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           if (!nextContainer) return;
 
           const drawers = document.querySelectorAll<HTMLElement>(DRAWER_SELECTOR);
+          const navContainers = getNavContainers();
           let startWidth = 0;
           let wasNavOpen = false;
+          let revealOffset = OFFSCREEN_TRANSLATE;
 
           // 1. Measure BEFORE changing any classes
           if (drawers.length > 0) {
@@ -443,6 +531,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
               document.body.classList.contains('is-nav-open') ||
               sourceDrawer.classList.contains('is-nav-open');
             startWidth = sourceDrawer.getBoundingClientRect().width;
+            revealOffset = getDrawerRevealOffset(startWidth);
           }
 
           // 2. Change Global State (Classes)
@@ -478,25 +567,28 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
             });
           }
 
+          prepareNavContainersForFade(navContainers, true);
           prepareContainer(nextContainer, true);
-          placeContainerOffscreen(nextContainer);
-          nextContainer.style.setProperty('opacity', '1', 'important');
+          placeContainerOffscreen(nextContainer, revealOffset);
+          nextContainer.style.setProperty('opacity', '0', 'important');
         },
         leave: async ({ current, next }: any) => {
           onBeforeLeave?.();
           hideCurrentContainer(current?.container as HTMLElement | null);
           const nextContainer = next.container as HTMLElement | null;
           if (nextContainer) {
+            const drawers = document.querySelectorAll<HTMLElement>(DRAWER_SELECTOR);
+            const drawerWidth = drawers[0]?.getBoundingClientRect().width ?? 0;
             prepareContainer(nextContainer, true);
-            placeContainerOffscreen(nextContainer);
-            nextContainer.style.setProperty('opacity', '1', 'important');
+            placeContainerOffscreen(nextContainer, getDrawerRevealOffset(drawerWidth));
+            nextContainer.style.setProperty('opacity', '0', 'important');
           }
         },
         enter: async ({ next }: any) => {
           const animations: Promise<void>[] = [];
           const nextContainer = next.container as HTMLElement | null;
           if (nextContainer) {
-            animations.push(animateContainerTo(nextContainer, 'translateX(0)'));
+            animations.push(animateContainerTo(nextContainer, 'translateX(0)', '1'));
           }
 
           const drawers = document.querySelectorAll<HTMLElement>(DRAWER_SELECTOR);
@@ -527,6 +619,10 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
                 });
               })
             );
+          }
+          const navContainers = getNavContainers();
+          if (navContainers.length > 0) {
+            animations.push(animateNavContainersOut(navContainers, true));
           }
           await Promise.all(animations);
           // Cleanup handled by next transition or 'after' hooks
@@ -571,6 +667,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
           setCloseTriggerVisible(false);
           setNavVisible(true);
+          resetNavContainerStyles();
           const drawer = getDrawer();
           if (drawer) {
             resetDrawerStylesForHome();

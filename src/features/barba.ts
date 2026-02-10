@@ -20,12 +20,21 @@ declare global {
 
 const BARBA_WRAPPER_SELECTOR = '[data-barba="wrapper"]';
 const DRAWER_SELECTOR = '.drawer, [data-nav="wrapper"]';
+const NAV_CONTAINER_SELECTOR = '.nav-container';
 const CLOSE_SELECTOR = '[data-nav="close-project"]';
 const DRAWER_OPEN_CLASS = 'is-drawer-open';
 const PERIPHERAL_BODY_CLASS = 'is-in-peripheral';
 const TRANSITION_DURATION = 700;
 const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const DRAWER_GAP = '5rem';
+const NAV_FADE_SCALE = 0.96;
+const NAV_FADE_TRANSLATE = '0.5rem';
+const CLOSE_HOVER_SHIFT = '1.25rem';
+const CLOSE_HOVER_DURATION = 200;
+const CLOSE_HOVER_EASING = 'cubic-bezier(0.22, 1.2, 0.36, 1)';
+const LOOP_SLIDER_SNAP_ATTR = 'data-loop-slider-snap';
+const PROJECT_SHADOW_FALLBACK =
+  '0 5px 15px 0 rgba(0, 0, 0, 0.35), -25px 0 50px -12px rgba(0, 0, 0, 0.25)';
 const OFFSCREEN_TRANSLATE = 'calc(100vw - var(--drawer-gap, 5rem))';
 const BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
 const LOGO_PARENT_CANDIDATES = ['[data-logo-parent]', '.logo-2'];
@@ -34,13 +43,197 @@ const LOGO_FULL_FALLBACK_SELECTOR = '.logo:not(.icon)';
 const LOGO_ICON_FALLBACK_SELECTOR = '.logo.icon';
 
 const setCssVars = () => {
-  if (!document.documentElement.style.getPropertyValue('--drawer-gap')) {
-    document.documentElement.style.setProperty('--drawer-gap', DRAWER_GAP);
+  const root = document.documentElement;
+  const computedGap = window.getComputedStyle(root).getPropertyValue('--drawer-gap').trim();
+  const baseGap = computedGap || DRAWER_GAP;
+  if (!computedGap) {
+    root.style.setProperty('--drawer-gap', DRAWER_GAP);
+  }
+  if (!root.dataset.drawerGapBase) {
+    root.dataset.drawerGapBase = baseGap;
+  }
+};
+
+const setHorizontalOverflowLock = (lock: boolean) => {
+  const root = document.documentElement;
+  const body = document.body;
+  if (lock) {
+    root.style.setProperty('overflow-x', 'hidden');
+    body.style.setProperty('overflow-x', 'hidden');
+  } else {
+    root.style.removeProperty('overflow-x');
+    body.style.removeProperty('overflow-x');
   }
 };
 
 const getDrawer = () => document.querySelector<HTMLElement>(DRAWER_SELECTOR);
 const getCloseTrigger = () => document.querySelector<HTMLElement>(CLOSE_SELECTOR);
+const getNavContainers = () =>
+  Array.from(document.querySelectorAll<HTMLElement>(NAV_CONTAINER_SELECTOR));
+const getActiveContainer = () => document.querySelector<HTMLElement>(BARBA_CONTAINER_SELECTOR);
+const closeHoverSources = new Set<string>();
+const closeHoverTimeouts = new WeakMap<HTMLElement, number>();
+const closeHoverTransitions = new WeakMap<
+  HTMLElement,
+  {
+    transition: string;
+    transitionPriority: string;
+    property: string;
+    propertyPriority: string;
+    duration: string;
+    durationPriority: string;
+    timing: string;
+    timingPriority: string;
+    delay: string;
+    delayPriority: string;
+  }
+>();
+const getBaseDrawerGap = () => {
+  const root = document.documentElement;
+  if (!root.dataset.drawerGapBase) {
+    const computedGap = window.getComputedStyle(root).getPropertyValue('--drawer-gap').trim();
+    root.dataset.drawerGapBase = computedGap || DRAWER_GAP;
+  }
+
+  return root.dataset.drawerGapBase || DRAWER_GAP;
+};
+
+type NavTransitionParts = {
+  duration: string;
+  timing: string;
+  delay: string;
+  durationMs: number;
+  delayMs: number;
+};
+
+const parseTimeToMs = (value: string) => {
+  const match = value.trim().match(/^(-?\d+(?:\.\d+)?)(m?s)$/);
+  if (!match) {
+    return null;
+  }
+  const amount = Number.parseFloat(match[1]);
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+  return match[2] === 's' ? amount * 1000 : amount;
+};
+
+const getNavTransitionParts = (sourceElement?: Element | null): NavTransitionParts => {
+  const root = document.documentElement;
+  const readValue = (element: Element) =>
+    window.getComputedStyle(element).getPropertyValue('--nav-transition').trim();
+  const source = sourceElement ?? root;
+  let value = readValue(source);
+  if (!value && source !== root) {
+    value = readValue(root);
+  }
+  const fallback = `${CLOSE_HOVER_DURATION}ms ${CLOSE_HOVER_EASING}`;
+  const raw = value || fallback;
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  const timeTokens = tokens.filter((token) => /^-?\d+(?:\.\d+)?m?s$/.test(token));
+  const timingTokens = tokens.filter((token) => !/^-?\d+(?:\.\d+)?m?s$/.test(token));
+  const duration = timeTokens[0] || `${CLOSE_HOVER_DURATION}ms`;
+  const delay = timeTokens[1] || '0ms';
+  const timing = timingTokens.join(' ').trim() || CLOSE_HOVER_EASING;
+  const durationMs = parseTimeToMs(duration) ?? CLOSE_HOVER_DURATION;
+  const delayMs = parseTimeToMs(delay) ?? 0;
+
+  return {
+    duration,
+    timing,
+    delay,
+    durationMs,
+    delayMs,
+  };
+};
+
+const cacheHoverTransition = (element: HTMLElement) => {
+  if (closeHoverTransitions.has(element)) {
+    return;
+  }
+
+  closeHoverTransitions.set(element, {
+    transition: element.style.getPropertyValue('transition'),
+    transitionPriority: element.style.getPropertyPriority('transition'),
+    property: element.style.getPropertyValue('transition-property'),
+    propertyPriority: element.style.getPropertyPriority('transition-property'),
+    duration: element.style.getPropertyValue('transition-duration'),
+    durationPriority: element.style.getPropertyPriority('transition-duration'),
+    timing: element.style.getPropertyValue('transition-timing-function'),
+    timingPriority: element.style.getPropertyPriority('transition-timing-function'),
+    delay: element.style.getPropertyValue('transition-delay'),
+    delayPriority: element.style.getPropertyPriority('transition-delay'),
+  });
+};
+
+const restoreHoverTransition = (element: HTMLElement) => {
+  const cached = closeHoverTransitions.get(element);
+  if (!cached) {
+    return;
+  }
+
+  const restore = (property: string, value: string, priority: string) => {
+    if (value) {
+      element.style.setProperty(property, value, priority);
+    } else {
+      element.style.removeProperty(property);
+    }
+  };
+
+  restore('transition', cached.transition, cached.transitionPriority);
+  restore('transition-property', cached.property, cached.propertyPriority);
+  restore('transition-duration', cached.duration, cached.durationPriority);
+  restore('transition-timing-function', cached.timing, cached.timingPriority);
+  restore('transition-delay', cached.delay, cached.delayPriority);
+
+  closeHoverTransitions.delete(element);
+};
+
+const applyHoverTransition = (
+  element: HTMLElement,
+  properties: string[],
+  transition: NavTransitionParts
+) => {
+  cacheHoverTransition(element);
+  const computed = window.getComputedStyle(element);
+  const { duration, timing, delay } = transition;
+  const baseProperties = computed.transitionProperty
+    .split(',')
+    .map((prop) => prop.trim())
+    .filter(Boolean);
+  const hasAll = baseProperties.includes('all');
+  const mergedProperties = hasAll
+    ? 'all'
+    : Array.from(new Set([...baseProperties.filter((prop) => prop !== 'none'), ...properties]))
+        .filter(Boolean)
+        .join(', ');
+
+  element.style.setProperty(
+    'transition-property',
+    mergedProperties || properties.join(', '),
+    'important'
+  );
+  element.style.setProperty('transition-duration', duration, 'important');
+  element.style.setProperty('transition-timing-function', timing, 'important');
+  element.style.setProperty('transition-delay', delay, 'important');
+};
+
+const getDrawerRevealOffset = (drawerWidth: number) => {
+  if (!Number.isFinite(drawerWidth) || drawerWidth <= 0) {
+    return OFFSCREEN_TRANSLATE;
+  }
+
+  const gapValue = window
+    .getComputedStyle(document.documentElement)
+    .getPropertyValue('--drawer-gap')
+    .trim();
+  const gap = Number.parseFloat(gapValue);
+  const gapPx = Number.isFinite(gap) ? gap : 0;
+  const fullWidth = window.innerWidth - gapPx;
+  const offset = Math.max(0, fullWidth - drawerWidth);
+
+  return `${offset}px`;
+};
 
 const getLogoElements = () => {
   const parent = LOGO_PARENT_CANDIDATES.reduce<HTMLElement | null>((found, selector) => {
@@ -168,6 +361,61 @@ const ensureDrawerBaseStyles = () => {
   drawer.style.transitionProperty = drawer.style.transitionProperty || 'transform';
 };
 
+const prepareNavContainersForFade = (containers: HTMLElement[], forceImportant = false) => {
+  if (containers.length === 0) {
+    return;
+  }
+
+  const priority = forceImportant ? 'important' : '';
+  containers.forEach((container) => {
+    container.style.setProperty('transition', 'none', priority);
+    container.style.setProperty('opacity', '1', priority);
+    container.style.setProperty('transform', 'translateX(0) scale(1)', priority);
+    container.style.setProperty('will-change', 'opacity, transform', priority);
+    container.style.setProperty('pointer-events', 'auto', priority);
+  });
+
+  void containers[0].offsetWidth;
+};
+
+const animateNavContainersOut = (containers: HTMLElement[], forceImportant = false) =>
+  new Promise<void>((resolve) => {
+    if (containers.length === 0) {
+      resolve();
+      return;
+    }
+
+    const priority = forceImportant ? 'important' : '';
+    requestAnimationFrame(() => {
+      containers.forEach((container) => {
+        container.style.setProperty(
+          'transition',
+          `opacity ${TRANSITION_DURATION}ms ${EASING}, transform ${TRANSITION_DURATION}ms ${EASING}`,
+          priority
+        );
+        container.style.setProperty('opacity', '0', priority);
+        container.style.setProperty(
+          'transform',
+          `translateX(${NAV_FADE_TRANSLATE}) scale(${NAV_FADE_SCALE})`,
+          priority
+        );
+        container.style.setProperty('pointer-events', 'none', priority);
+      });
+      waitForTransition(containers[0]).then(resolve);
+    });
+  });
+
+const resetNavContainerStyles = () => {
+  const navContainers = getNavContainers();
+  navContainers.forEach((container) => {
+    container.style.removeProperty('opacity');
+    container.style.removeProperty('transform');
+    container.style.removeProperty('transition');
+    container.style.removeProperty('will-change');
+    container.style.removeProperty('pointer-events');
+  });
+};
+
 const setLogoState = (isPeripheral: boolean) => {
   const { parent, full, icon } = getLogoElements();
 
@@ -264,6 +512,7 @@ const resetDrawerStylesForHome = () => {
 
   drawer.classList.remove(DRAWER_OPEN_CLASS);
   drawer.style.removeProperty('transform');
+  drawer.style.removeProperty('transition');
   drawer.style.removeProperty('transition-property');
   drawer.style.removeProperty('transition-duration');
   drawer.style.removeProperty('transition-timing-function');
@@ -328,8 +577,111 @@ const setCloseTriggerVisible = (isVisible: boolean) => {
   close.classList.toggle('is-visible', isVisible);
   close.style.pointerEvents = isVisible ? 'auto' : 'none';
   close.style.display = isVisible ? '' : 'none';
-  close.style.zIndex = '30';
+  close.style.setProperty('z-index', 'var(--close-z, 20)', 'important');
+  close.style.setProperty('background-color', 'transparent', 'important');
+  close.style.setProperty('background', 'transparent', 'important');
   close.setAttribute('aria-hidden', String(!isVisible));
+
+  if (!isVisible) {
+    closeHoverSources.clear();
+    applyCloseHoverState(false);
+    close.style.removeProperty('width');
+    close.style.removeProperty('transition');
+  } else {
+    initCloseHover(close);
+    initLogoHover();
+  }
+};
+
+const setCloseHoverSource = (source: string, isActive: boolean) => {
+  if (isActive) {
+    closeHoverSources.add(source);
+  } else {
+    closeHoverSources.delete(source);
+  }
+
+  applyCloseHoverState(closeHoverSources.size > 0);
+};
+
+const applyCloseHoverState = (isHovering: boolean) => {
+  const isPeripheral = document.body.classList.contains(PERIPHERAL_BODY_CLASS);
+  if (!isPeripheral && isHovering) {
+    return;
+  }
+
+  document.body.classList.toggle('is-close-hover', isHovering && isPeripheral);
+
+  const drawer = getDrawer();
+  const container = getActiveContainer();
+  const close = getCloseTrigger();
+  const baseGap = getBaseDrawerGap();
+  const nextGap = isHovering ? `calc(${baseGap} + ${CLOSE_HOVER_SHIFT})` : baseGap;
+  const transitionSource = close || drawer || container || document.documentElement;
+  const navTransition = getNavTransitionParts(transitionSource);
+
+  const transitionTargets = [
+    { element: drawer, properties: ['width'] },
+    { element: container, properties: ['left', 'width'] },
+    { element: close, properties: ['width'] },
+  ];
+
+  transitionTargets.forEach(({ element, properties }) => {
+    if (!element) {
+      return;
+    }
+
+    const pendingTimeout = closeHoverTimeouts.get(element);
+    if (pendingTimeout) {
+      window.clearTimeout(pendingTimeout);
+      closeHoverTimeouts.delete(element);
+    }
+
+    applyHoverTransition(element, properties, navTransition);
+
+    if (!isHovering) {
+      const timeoutId = window.setTimeout(() => {
+        restoreHoverTransition(element);
+      }, navTransition.durationMs + navTransition.delayMs + 40);
+      closeHoverTimeouts.set(element, timeoutId);
+    }
+  });
+
+  const reflowTarget = drawer || container || close;
+  if (reflowTarget) {
+    void reflowTarget.offsetWidth;
+  }
+  document.documentElement.style.setProperty('--drawer-gap', nextGap);
+};
+
+const initCloseHover = (close: HTMLElement) => {
+  if (close.dataset.closeHoverBound) {
+    return;
+  }
+
+  close.dataset.closeHoverBound = 'true';
+  const handleEnter = () => setCloseHoverSource('close', true);
+  const handleLeave = () => setCloseHoverSource('close', false);
+
+  close.addEventListener('pointerenter', handleEnter);
+  close.addEventListener('pointerleave', handleLeave);
+  close.addEventListener('focusin', handleEnter);
+  close.addEventListener('focusout', handleLeave);
+};
+
+const initLogoHover = () => {
+  const { parent } = getLogoElements();
+  if (!parent || parent.dataset.closeHoverLogoBound) {
+    return;
+  }
+
+  parent.dataset.closeHoverLogoBound = 'true';
+  const handleEnter = () => setCloseHoverSource('logo', true);
+  const handleLeave = () => setCloseHoverSource('logo', false);
+
+  parent.addEventListener('pointerenter', handleEnter);
+  parent.addEventListener('pointerleave', handleLeave);
+  parent.addEventListener('focusin', handleEnter);
+  parent.addEventListener('focusout', handleLeave);
 };
 
 const syncDrawerStateForNamespace = (namespace: string | null | undefined) => {
@@ -350,17 +702,28 @@ const prepareContainer = (container: HTMLElement, isPeripheral: boolean) => {
   style.maxWidth = isPeripheral ? 'none' : '';
   style.minHeight = style.minHeight || '100vh';
   style.overflowY = isPeripheral ? 'auto' : '';
+  style.overflowX = isPeripheral ? 'visible' : '';
   style.willChange = 'transform, opacity';
-  style.zIndex = isPeripheral ? '20' : '0';
+  if (isPeripheral) {
+    style.setProperty('z-index', 'var(--container-z, 40)', 'important');
+    style.setProperty(
+      'box-shadow',
+      `var(--project-shadow, ${PROJECT_SHADOW_FALLBACK})`,
+      'important'
+    );
+  } else {
+    style.removeProperty('z-index');
+    style.removeProperty('box-shadow');
+  }
 };
 
-const placeContainerOffscreen = (container: HTMLElement) => {
+const placeContainerOffscreen = (container: HTMLElement, translateX = OFFSCREEN_TRANSLATE) => {
   const { style } = container;
   style.setProperty('transition', 'none', 'important');
-  style.setProperty('transform', `translateX(${OFFSCREEN_TRANSLATE})`, 'important');
+  style.setProperty('transform', `translateX(${translateX})`, 'important');
 };
 
-const animateContainerTo = async (container: HTMLElement, translateX: string) => {
+const animateContainerTo = async (container: HTMLElement, translateX: string, opacity?: string) => {
   const { style } = container;
   style.setProperty('will-change', 'transform, opacity');
   // force a reflow to ensure the previous transform sticks before animating
@@ -371,6 +734,9 @@ const animateContainerTo = async (container: HTMLElement, translateX: string) =>
       style.setProperty('transition-duration', `${TRANSITION_DURATION}ms`, 'important');
       style.setProperty('transition-timing-function', EASING, 'important');
       style.setProperty('transform', translateX, 'important');
+      if (opacity !== undefined) {
+        style.setProperty('opacity', opacity, 'important');
+      }
       waitForTransition(container).then(resolve);
     });
   });
@@ -391,6 +757,8 @@ const syncInitialState = () => {
   document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheral);
   setCloseTriggerVisible(isPeripheral);
   setLogoState(isPeripheral);
+  resetNavContainerStyles();
+  setHorizontalOverflowLock(!isPeripheral);
 
   if (drawer) {
     if (isPeripheral) {
@@ -433,8 +801,10 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           if (!nextContainer) return;
 
           const drawers = document.querySelectorAll<HTMLElement>(DRAWER_SELECTOR);
+          const navContainers = getNavContainers();
           let startWidth = 0;
           let wasNavOpen = false;
+          let revealOffset = OFFSCREEN_TRANSLATE;
 
           // 1. Measure BEFORE changing any classes
           if (drawers.length > 0) {
@@ -443,6 +813,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
               document.body.classList.contains('is-nav-open') ||
               sourceDrawer.classList.contains('is-nav-open');
             startWidth = sourceDrawer.getBoundingClientRect().width;
+            revealOffset = getDrawerRevealOffset(startWidth);
           }
 
           // 2. Change Global State (Classes)
@@ -478,8 +849,9 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
             });
           }
 
+          prepareNavContainersForFade(navContainers, true);
           prepareContainer(nextContainer, true);
-          placeContainerOffscreen(nextContainer);
+          placeContainerOffscreen(nextContainer, revealOffset);
           nextContainer.style.setProperty('opacity', '1', 'important');
         },
         leave: async ({ current, next }: any) => {
@@ -487,8 +859,10 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           hideCurrentContainer(current?.container as HTMLElement | null);
           const nextContainer = next.container as HTMLElement | null;
           if (nextContainer) {
+            const drawers = document.querySelectorAll<HTMLElement>(DRAWER_SELECTOR);
+            const drawerWidth = drawers[0]?.getBoundingClientRect().width ?? 0;
             prepareContainer(nextContainer, true);
-            placeContainerOffscreen(nextContainer);
+            placeContainerOffscreen(nextContainer, getDrawerRevealOffset(drawerWidth));
             nextContainer.style.setProperty('opacity', '1', 'important');
           }
         },
@@ -528,6 +902,10 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
               })
             );
           }
+          const navContainers = getNavContainers();
+          if (navContainers.length > 0) {
+            animations.push(animateNavContainersOut(navContainers, true));
+          }
           await Promise.all(animations);
           // Cleanup handled by next transition or 'after' hooks
         },
@@ -540,6 +918,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
         beforeEnter: ({ next }: any) => {
           const nextContainer = next.container as HTMLElement | null;
           if (!nextContainer) return;
+          setHorizontalOverflowLock(true);
           prepareContainer(nextContainer, false);
           nextContainer.style.transition = 'none';
           nextContainer.style.transform = 'translateX(0)';
@@ -571,6 +950,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(nextNs));
           setCloseTriggerVisible(false);
           setNavVisible(true);
+          resetNavContainerStyles();
           const drawer = getDrawer();
           if (drawer) {
             resetDrawerStylesForHome();
@@ -602,8 +982,16 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
 
   barba.hooks.afterEnter((data: any) => {
     const ns = getNamespace(data.next.container);
+    const prevNs = getNamespace(data.current?.container);
+    const shouldSnapLoopSlider = ns === 'home' && isPeripheralNamespace(prevNs);
+    if (shouldSnapLoopSlider) {
+      document.body.setAttribute(LOOP_SLIDER_SNAP_ATTR, 'true');
+    } else {
+      document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR);
+    }
     document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheralNamespace(ns));
     setCloseTriggerVisible(isPeripheralNamespace(ns));
+    setHorizontalOverflowLock(!isPeripheralNamespace(ns));
     reinitializeWebflow();
     onAfterEnter();
     if (ns === 'home') {

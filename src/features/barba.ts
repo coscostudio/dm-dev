@@ -56,7 +56,7 @@ const setCssVars = () => {
 
 const setHorizontalOverflowLock = (lock: boolean) => {
   const root = document.documentElement;
-  const body = document.body;
+  const { body } = document;
   if (lock) {
     root.style.setProperty('overflow-x', 'hidden');
     body.style.setProperty('overflow-x', 'hidden');
@@ -416,7 +416,12 @@ const resetNavContainerStyles = () => {
   });
 };
 
-const setLogoState = (isPeripheral: boolean) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const setLogoState = (_isPeripheral: boolean) => {
+  // DISABLED: Now using CSS-only single-SVG morph
+  // The CSS controls path visibility via body classes (is-in-peripheral, is-nav-logo-icon)
+  // Old logic was setting opacity: 0 on the full logo element, causing it to disappear
+  /* OLD TWO-SVG SWITCHING LOGIC - NO LONGER NEEDED
   const { parent, full, icon } = getLogoElements();
 
   if (!parent || !full || !icon) return;
@@ -452,6 +457,7 @@ const setLogoState = (isPeripheral: boolean) => {
   icon.style.setProperty('pointer-events', isPeripheral ? 'auto' : 'none', 'important');
   icon.style.setProperty('transform', isPeripheral ? 'scale(1)' : 'scale(1.2)', 'important');
   icon.style.setProperty('z-index', '100', 'important');
+  */
 };
 
 const animateLogo = async (toPeripheral: boolean) => {
@@ -639,9 +645,12 @@ const applyCloseHoverState = (isHovering: boolean) => {
     applyHoverTransition(element, properties, navTransition);
 
     if (!isHovering) {
-      const timeoutId = window.setTimeout(() => {
-        restoreHoverTransition(element);
-      }, navTransition.durationMs + navTransition.delayMs + 40);
+      const timeoutId = window.setTimeout(
+        () => {
+          restoreHoverTransition(element);
+        },
+        navTransition.durationMs + navTransition.delayMs + 40
+      );
       closeHoverTimeouts.set(element, timeoutId);
     }
   });

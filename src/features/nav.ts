@@ -16,7 +16,7 @@ type NavElements = {
   links: HTMLAnchorElement[];
 };
 
-type NavCleanup = () => void;
+type NavCleanup = (options?: { resetState?: boolean }) => void;
 
 const getNavElements = (): NavElements | null => {
   const wrapper =
@@ -238,7 +238,7 @@ export const initNavInteractions = (): NavCleanup | null => {
     link.addEventListener('click', handleLinkClick);
   });
 
-  return () => {
+  return (options) => {
     if (hideLinksTimeout !== null) {
       window.clearTimeout(hideLinksTimeout);
       hideLinksTimeout = null;
@@ -255,6 +255,8 @@ export const initNavInteractions = (): NavCleanup | null => {
       link.removeEventListener('click', handleLinkClick);
     });
 
-    resetNavState();
+    if (options?.resetState !== false) {
+      resetNavState();
+    }
   };
 };

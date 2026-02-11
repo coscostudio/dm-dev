@@ -4,10 +4,14 @@ import { initBarba } from './features/barba';
 import { destroyLoopSlider, initLoopSlider } from './features/loopSlider';
 import { forceCloseNav, initNavInteractions, setNavVisible } from './features/nav';
 
-let navCleanup: (() => void) | null = null;
+let navCleanup: ((options?: { resetState?: boolean }) => void) | null = null;
 
-const cleanupFeatures = () => {
-  navCleanup?.();
+const cleanupFeatures = (options?: { preserveNavState?: boolean }) => {
+  if (options?.preserveNavState) {
+    navCleanup?.({ resetState: false });
+  } else {
+    navCleanup?.();
+  }
   navCleanup = null;
   destroyLoopSlider();
 };
@@ -20,7 +24,7 @@ const initFeatures = () => {
     navCleanup = initNavInteractions();
   } else {
     forceCloseNav();
-    setNavVisible(false);
+    setNavVisible(true);
     navCleanup = null;
   }
   initLoopSlider();
@@ -32,7 +36,7 @@ const initFeatures = () => {
       navCleanup = initNavInteractions();
     } else {
       forceCloseNav();
-      setNavVisible(false);
+      setNavVisible(true);
       navCleanup = null;
     }
   });
@@ -42,7 +46,9 @@ const init = () => {
   initFeatures();
 
   initBarba({
-    onBeforeLeave: cleanupFeatures,
+    onBeforeLeave: ({ isPeripheralNext }) => {
+      cleanupFeatures({ preserveNavState: isPeripheralNext });
+    },
     onAfterEnter: initFeatures,
   });
 };

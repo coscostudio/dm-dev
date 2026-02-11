@@ -5,7 +5,12 @@ import { forceCloseNav, setNavVisible } from './nav';
 
 type BarbaCallbacks = {
   onAfterEnter: () => void;
-  onBeforeLeave?: () => void;
+  onBeforeLeave?: (data: {
+    currentNamespace: string | null;
+    nextNamespace: string | null;
+    isPeripheralCurrent: boolean;
+    isPeripheralNext: boolean;
+  }) => void;
 };
 
 declare global {
@@ -47,6 +52,18 @@ const getCloseTrigger = () => document.querySelector<HTMLElement>(CLOSE_SELECTOR
 const getNamespace = (container?: Element | null) =>
   container?.getAttribute('data-barba-namespace') ?? null;
 const isPeripheralNamespace = (ns: string | null | undefined) => Boolean(ns && ns !== 'home');
+const isPeripheralHref = (href?: string | null) => {
+  if (!href) {
+    return false;
+  }
+  try {
+    const url = new URL(href, window.location.href);
+    const path = url.pathname.replace(/\/+$/, '');
+    return path !== '';
+  } catch {
+    return false;
+  }
+};
 
 const updateBodyAttributes = (nextHtml: string) => {
   const parsed = new DOMParser().parseFromString(nextHtml, 'text/html');
@@ -165,8 +182,18 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           // ensure the close trigger is ready as we transition in
           setCloseTriggerVisible(true);
         },
-        leave: async ({ current }: any) => {
-          onBeforeLeave?.();
+        leave: async ({ current, next, trigger }: any) => {
+          const currentNamespace = getNamespace(current?.container);
+          const nextNamespace = getNamespace(next?.container);
+          const nextHref =
+            next?.url?.href ??
+            (trigger instanceof Element ? trigger.getAttribute('href') : null);
+          onBeforeLeave?.({
+            currentNamespace,
+            nextNamespace,
+            isPeripheralCurrent: isPeripheralNamespace(currentNamespace),
+            isPeripheralNext: isPeripheralNamespace(nextNamespace) || isPeripheralHref(nextHref),
+          });
           const currentContainer = current.container as HTMLElement | null;
           if (currentContainer) {
             // Fade out current content
@@ -216,13 +243,25 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           // Home container usually doesn't need special prep if CSS is correct.
           setCloseTriggerVisible(false);
         },
-        leave: async ({ current }: any) => {
-          onBeforeLeave?.();
+        leave: async ({ current, next, trigger }: any) => {
+          const currentNamespace = getNamespace(current?.container);
+          const nextNamespace = getNamespace(next?.container);
+          const nextHref =
+            next?.url?.href ??
+            (trigger instanceof Element ? trigger.getAttribute('href') : null);
+          onBeforeLeave?.({
+            currentNamespace,
+            nextNamespace,
+            isPeripheralCurrent: isPeripheralNamespace(currentNamespace),
+            isPeripheralNext: isPeripheralNamespace(nextNamespace) || isPeripheralHref(nextHref),
+          });
           const currentContainer = current.container as HTMLElement | null;
           if (currentContainer) {
             currentContainer.style.transition = `opacity ${TRANSITION_DURATION}ms ${EASING}`;
             currentContainer.style.opacity = '0';
           }
+
+          forceCloseNav();
 
           // Trigger shrink back to home via CSS class removal
           document.body.classList.remove(PERIPHERAL_BODY_CLASS);

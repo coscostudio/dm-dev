@@ -44,7 +44,6 @@ body nav.drawer[data-nav="wrapper"] {
   z-index: 60 !important;
   transform: none !important;
   width: var(--nav-width-closed) !important;
-  max-width: var(--nav-width-open) !important;
   transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1) !important;
 
   /* NEW: Dynamic Island Base Styles */
@@ -57,7 +56,7 @@ body nav.drawer[data-nav="wrapper"] {
 }
 
 /* Home nav Open state */
-body nav.drawer[data-nav="wrapper"].is-nav-open {
+body:not(.is-in-peripheral) nav.drawer[data-nav="wrapper"].is-nav-open {
   width: var(--nav-width-open) !important;
   box-shadow: 0 5px 15px 0 rgba(0,0,0,0.35), -25px 0 50px -12px rgba(0,0,0,0.25) !important;
 
@@ -72,7 +71,7 @@ body nav.drawer[data-nav="wrapper"].is-nav-open {
   transition: background-color 0.3s ease !important;
 }
 
-body nav.drawer[data-nav="wrapper"].is-nav-open .nav-toggle {
+body:not(.is-in-peripheral) nav.drawer[data-nav="wrapper"].is-nav-open .nav-toggle {
   background-color: var(--nav-toggle-bg-open) !important;
 }
 
@@ -168,7 +167,7 @@ body.is-in-peripheral [data-nav="close-project"] {
 .nav-container {
   justify-content: left !important;
 }
-nav.drawer[data-nav="wrapper"].is-nav-open .nav-container {
+body:not(.is-in-peripheral) nav.drawer[data-nav="wrapper"].is-nav-open .nav-container {
   justify-content: space-between !important; /* Space-between when open */
 }
 

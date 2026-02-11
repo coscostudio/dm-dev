@@ -46,8 +46,8 @@ const init = () => {
   initFeatures();
 
   initBarba({
-    onBeforeLeave: ({ isPeripheralNext }) => {
-      cleanupFeatures({ preserveNavState: isPeripheralNext });
+    onBeforeLeave: () => {
+      cleanupFeatures({ preserveNavState: true });
     },
     onAfterEnter: initFeatures,
   });

@@ -148,6 +148,11 @@ body.is-in-peripheral [data-nav="close-project"] {
   cursor: pointer;
 }
 
+/* Hide nav toggle on peripheral pages */
+body.is-in-peripheral [data-nav="toggle"] {
+  display: none !important;
+}
+
 /* Nav links/visibility */
 [data-nav="links"] { display: none; }
 [data-nav="wrapper"].are-nav-links-visible [data-nav="links"] { display: flex; }

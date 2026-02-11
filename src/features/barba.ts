@@ -26,6 +26,9 @@ declare global {
 const BARBA_WRAPPER_SELECTOR = '[data-barba="wrapper"]';
 
 const CLOSE_SELECTOR = '[data-nav="close-project"]';
+const NAV_SELECTOR = 'nav.drawer';
+const NAV_PERSIST_ATTR = 'data-nav-persistent';
+const CLOSE_PERSIST_ATTR = 'data-close-persistent';
 
 const PERIPHERAL_BODY_CLASS = 'is-in-peripheral';
 const TRANSITION_DURATION = 700;
@@ -34,6 +37,73 @@ const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const LOOP_SLIDER_SNAP_ATTR = 'data-loop-slider-snap';
 
 const BARBA_CONTAINER_SELECTOR = '[data-barba="container"]';
+
+const ensurePersistentShell = () => {
+  const wrapper = document.querySelector<HTMLElement>(BARBA_WRAPPER_SELECTOR);
+  if (!wrapper) {
+    return;
+  }
+
+  const container = document.querySelector<HTMLElement>(BARBA_CONTAINER_SELECTOR);
+
+  let nav =
+    wrapper.querySelector<HTMLElement>(`${NAV_SELECTOR}[${NAV_PERSIST_ATTR}]`) ||
+    wrapper.querySelector<HTMLElement>(NAV_SELECTOR) ||
+    container?.querySelector<HTMLElement>(NAV_SELECTOR) ||
+    null;
+
+  if (nav) {
+    nav.setAttribute(NAV_PERSIST_ATTR, 'true');
+    if (nav.parentElement !== wrapper) {
+      wrapper.insertBefore(nav, wrapper.firstChild);
+    }
+  }
+
+  wrapper.querySelectorAll<HTMLElement>(NAV_SELECTOR).forEach((node) => {
+    if (nav && node === nav) {
+      return;
+    }
+    node.remove();
+  });
+
+  if (container) {
+    container.querySelectorAll<HTMLElement>(NAV_SELECTOR).forEach((node) => {
+      if (nav && node === nav) {
+        return;
+      }
+      node.remove();
+    });
+  }
+
+  let close =
+    wrapper.querySelector<HTMLElement>(`${CLOSE_SELECTOR}[${CLOSE_PERSIST_ATTR}]`) ||
+    wrapper.querySelector<HTMLElement>(CLOSE_SELECTOR) ||
+    container?.querySelector<HTMLElement>(CLOSE_SELECTOR) ||
+    null;
+
+  if (close) {
+    close.setAttribute(CLOSE_PERSIST_ATTR, 'true');
+    if (close.parentElement !== wrapper) {
+      wrapper.insertBefore(close, nav?.nextSibling ?? wrapper.firstChild);
+    }
+  }
+
+  wrapper.querySelectorAll<HTMLElement>(CLOSE_SELECTOR).forEach((node) => {
+    if (close && node === close) {
+      return;
+    }
+    node.remove();
+  });
+
+  if (container) {
+    container.querySelectorAll<HTMLElement>(CLOSE_SELECTOR).forEach((node) => {
+      if (close && node === close) {
+        return;
+      }
+      node.remove();
+    });
+  }
+};
 
 const setHorizontalOverflowLock = (lock: boolean) => {
   const root = document.documentElement;
@@ -167,6 +237,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
     return;
   }
 
+  ensurePersistentShell();
   syncInitialState();
 
   barba.init({
@@ -285,10 +356,12 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
 
   barba.hooks.beforeEnter((data: any) => {
     updateBodyAttributes(data.next.html);
+    ensurePersistentShell();
     window.scrollTo(0, 0);
   });
 
   barba.hooks.afterEnter((data: any) => {
+    ensurePersistentShell();
     const ns = getNamespace(data.next.container);
     const prevNs = getNamespace(data.current?.container);
     const shouldSnapLoopSlider = ns === 'home' && isPeripheralNamespace(prevNs);

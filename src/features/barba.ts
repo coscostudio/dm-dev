@@ -31,6 +31,7 @@ const NAV_PERSIST_ATTR = 'data-nav-persistent';
 const CLOSE_PERSIST_ATTR = 'data-close-persistent';
 
 const PERIPHERAL_BODY_CLASS = 'is-in-peripheral';
+const TRANSITIONING_PERIPHERAL_CLASS = 'is-transitioning-peripheral';
 const TRANSITION_DURATION = 700;
 const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
@@ -265,6 +266,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
             isPeripheralCurrent: isPeripheralNamespace(currentNamespace),
             isPeripheralNext: isPeripheralNamespace(nextNamespace) || isPeripheralHref(nextHref),
           });
+          document.body.classList.add(TRANSITIONING_PERIPHERAL_CLASS);
           const currentContainer = current.container as HTMLElement | null;
           if (currentContainer) {
             // Fade out current content
@@ -278,6 +280,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           window.scrollTo(0, 0);
 
           // Trigger the 'Dynamic Island' expansion via CSS class
+          document.body.classList.add(TRANSITIONING_PERIPHERAL_CLASS);
           document.body.classList.add(PERIPHERAL_BODY_CLASS);
 
           // Ensure the underlying nav state is closed so it doesn't snap when we return
@@ -285,20 +288,21 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
 
           const nextContainer = next.container as HTMLElement | null;
           if (nextContainer) {
-            // Ensure next container starts invisible then fades in
+            // Ensure next container starts invisible and waits for the drawer to expand
             nextContainer.style.opacity = '0';
-            // Force reflow
-            void nextContainer.offsetWidth;
-
-            requestAnimationFrame(() => {
-              nextContainer.style.transition = `opacity ${TRANSITION_DURATION}ms ${EASING}`;
-              nextContainer.style.opacity = '1';
-            });
           }
 
           // Wait for the drawer expansion transition
           // The drawer transition is controlled by CSS on .is-in-peripheral
           await new Promise((r) => setTimeout(r, TRANSITION_DURATION));
+
+          document.body.classList.remove(TRANSITIONING_PERIPHERAL_CLASS);
+
+          if (nextContainer) {
+            void nextContainer.offsetWidth;
+            nextContainer.style.transition = `opacity ${TRANSITION_DURATION}ms ${EASING}`;
+            nextContainer.style.opacity = '1';
+          }
         },
       },
       {
@@ -326,6 +330,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
             isPeripheralCurrent: isPeripheralNamespace(currentNamespace),
             isPeripheralNext: isPeripheralNamespace(nextNamespace) || isPeripheralHref(nextHref),
           });
+          document.body.classList.remove(TRANSITIONING_PERIPHERAL_CLASS);
           const currentContainer = current.container as HTMLElement | null;
           if (currentContainer) {
             currentContainer.style.transition = `opacity ${TRANSITION_DURATION}ms ${EASING}`;

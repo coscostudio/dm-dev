@@ -37,13 +37,16 @@
 }
 
 /* Home nav defaults (Closed) */
-body nav.drawer[data-nav="wrapper"] {
+body .drawer-wrapper {
   position: fixed !important;
   top: 0 !important;
   right: 0 !important;
   left: auto !important;
   z-index: var(--nav-z) !important;
   transform: none !important;
+}
+
+body .drawer {
   width: var(--nav-width-closed) !important;
   transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1) !important;
 
@@ -57,7 +60,7 @@ body nav.drawer[data-nav="wrapper"] {
 }
 
 /* Home nav Open state */
-body:not(.is-in-peripheral) nav.drawer[data-nav="wrapper"].is-nav-open {
+body:not(.is-in-peripheral) .drawer.is-nav-open {
   width: var(--nav-width-open) !important;
   box-shadow: 0 5px 15px 0 rgba(0,0,0,0.35), -25px 0 50px -12px rgba(0,0,0,0.25) !important;
 
@@ -72,12 +75,12 @@ body:not(.is-in-peripheral) nav.drawer[data-nav="wrapper"].is-nav-open {
   transition: background-color 0.3s ease !important;
 }
 
-body:not(.is-in-peripheral) nav.drawer[data-nav="wrapper"].is-nav-open .nav-toggle {
+body:not(.is-in-peripheral) .drawer.is-nav-open .nav-toggle {
   background-color: var(--nav-toggle-bg-open) !important;
 }
 
 /* Peripheral takeover: Left-Gap Only Island */
-body.is-in-peripheral nav.drawer[data-nav="wrapper"] {
+body.is-in-peripheral .drawer-wrapper {
   position: fixed !important;
   top: 0 !important;
   right: 0 !important;
@@ -85,13 +88,17 @@ body.is-in-peripheral nav.drawer[data-nav="wrapper"] {
 
   /* IMPORTANT CHANGE: rely on width instead of 'left' anchor */
   left: auto !important;
-  width: calc(100vw - var(--drawer-gap)) !important;
 
   height: auto !important;
   max-width: none !important;
+  will-change: transform, top, left, right, bottom, width, height !important;
+}
+
+body.is-in-peripheral .drawer {
+  width: calc(100vw - var(--drawer-gap)) !important;
+  height: 100% !important;
   transform: translateX(0) !important;
   transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  will-change: transform, top, left, right, bottom, width, height !important;
 
   /* NEW: Peripheral Styles */
   background-color: var(--drawer-bg-peripheral) !important;
@@ -103,7 +110,7 @@ body.is-in-peripheral nav.drawer[data-nav="wrapper"] {
   border-radius: var(--drawer-radius) !important;
 }
 
-body.is-in-peripheral nav.drawer[data-nav="wrapper"].is-drawer-open {
+body.is-in-peripheral .drawer.is-drawer-open {
   /* Logic handled by base state above for fixed positioning */
 }
 
@@ -128,8 +135,7 @@ body.is-in-peripheral [data-barba="container"] {
   height: auto;
   min-height: 0; /* Override min-height 100vh since it's constrained */
   z-index: var(--container-z); /* Sit above the drawer */
-  overflow-y: auto; /* Scroll inside the island */
-  overflow-x: hidden; /* Prevent horizontal scroll */
+  overflow: hidden; /* Hard clip to drawer bounds */
   border-radius: var(--drawer-radius); /* Match drawer radius */
 
   /* NEW: Clipping */
@@ -137,14 +143,37 @@ body.is-in-peripheral [data-barba="container"] {
   clip-path: inset(0 round var(--drawer-radius));
 }
 
+body.is-in-peripheral [data-barba="container"] > .project-wrapper {
+  opacity: 1;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+
+body.is-in-peripheral {
+  overflow: hidden;
+}
+
 body.is-transitioning-peripheral [data-barba="container"] {
   z-index: 0 !important;
   pointer-events: none;
 }
 
+body.is-transitioning-peripheral [data-barba="container"].is-leaving {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
 /* Close trigger on the gap */
 [data-nav="close-project"] {
-  position: fixed;
+  position: absolute;
   left: 0; top: 0; bottom: 0;
   width: var(--drawer-gap);
   display: none;
@@ -165,13 +194,13 @@ body.is-in-peripheral [data-nav="toggle"] {
 
 /* Nav links/visibility */
 [data-nav="links"] { display: none; }
-[data-nav="wrapper"].are-nav-links-visible [data-nav="links"] { display: flex; }
+.drawer.are-nav-links-visible [data-nav="links"] { display: flex; }
 [data-nav="link"].nav-link {
   opacity: 0;
   pointer-events: none;
   transition: opacity 250ms ease, color 180ms ease;
 }
-[data-nav="wrapper"].is-nav-open [data-nav="link"].nav-link {
+.drawer.is-nav-open [data-nav="link"].nav-link {
   opacity: 1;
   pointer-events: auto;
 }
@@ -182,7 +211,7 @@ body.is-in-peripheral [data-nav="toggle"] {
 .nav-container {
   justify-content: left !important;
 }
-body:not(.is-in-peripheral) nav.drawer[data-nav="wrapper"].is-nav-open .nav-container {
+body:not(.is-in-peripheral) .drawer.is-nav-open .nav-container {
   justify-content: space-between !important; /* Space-between when open */
 }
 

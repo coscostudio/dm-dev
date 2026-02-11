@@ -124,9 +124,9 @@ body:not(.is-in-peripheral) [data-barba="container"] {
 /* Peripheral Container: Content sits inside the island area */
 body.is-in-peripheral [data-barba="container"] {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  top: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
 
   /* Match the drawer width logic */
   left: var(--drawer-gap);
@@ -137,10 +137,6 @@ body.is-in-peripheral [data-barba="container"] {
   z-index: var(--container-z); /* Sit above the drawer */
   overflow: hidden; /* Hard clip to drawer bounds */
   border-radius: var(--drawer-radius); /* Match drawer radius */
-
-  /* NEW: Clipping */
-  /* Ensure content clips to the border-radius */
-  clip-path: inset(0 round var(--drawer-radius));
 }
 
 body.is-in-peripheral [data-barba="container"] > .project-wrapper {

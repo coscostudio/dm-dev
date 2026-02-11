@@ -196,7 +196,27 @@ export const initNavInteractions = (): NavCleanup | null => {
     toggleNav();
   };
 
-  const handleLinkClick = () => {
+  /* 
+     UPDATED: Don't close nav immediately if we are going to a peripheral page 
+     This prevents the "shrink then expand" flicker.
+     Let Barba transition handle the state change.
+  */
+  const handleLinkClick = (e: MouseEvent) => {
+    const target = e.currentTarget as HTMLAnchorElement;
+    const href = target.getAttribute('href');
+
+    // Check if the link points to a peripheral page
+    const isPeripheral =
+      href &&
+      (href.includes('verkada') ||
+        href.includes('film') ||
+        href.includes('about') ||
+        href.includes('work'));
+
+    if (isPeripheral) {
+      return;
+    }
+
     closeNav();
   };
 

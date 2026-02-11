@@ -1,3 +1,5 @@
+import './styles/transitions.css';
+
 import { initBarba } from './features/barba';
 import { destroyLoopSlider, initLoopSlider } from './features/loopSlider';
 import { forceCloseNav, initNavInteractions, setNavVisible } from './features/nav';
@@ -22,7 +24,6 @@ const initFeatures = () => {
     navCleanup = null;
   }
   initLoopSlider();
-  // Re-run nav init on the next frame to survive any late DOM mutations (e.g. Webflow)
   window.requestAnimationFrame(() => {
     navCleanup?.();
     const isStillPeripheral = document.body.classList.contains('is-in-peripheral');

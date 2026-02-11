@@ -1,0 +1,306 @@
+:root {
+  /* Unified: drawer-gap and nav-width-closed are now the same */
+  --nav-width-closed: 3rem;
+  --nav-width-open: 30rem;
+  --nav-transition: 280ms cubic-bezier(0.4, 0, 0.2, 1);
+  --drawer-gap: 5rem; /* Synced with --nav-width-closed */
+  --container-z: 60;
+  --close-z: 20;
+
+  /* NEW: Dynamic Island Variables */
+  --drawer-bg-closed: rgba(0, 0, 0, 0.25);
+  --drawer-bg-open: rgba(0, 0, 0, 0.5);
+  --drawer-bg-peripheral: #4A4A4A;
+  --nav-toggle-bg-closed: #696969;
+  --nav-toggle-bg-open: #4A4A4A;
+  --drawer-blur: blur(25px);
+  --drawer-radius: 24px;
+}
+
+/* Tablet: reduce both values in sync */
+@media (max-width: 768px) {
+  :root {
+    --nav-width-closed: 3rem !important;
+    --drawer-gap: 4rem !important; /* Synced */
+    --nav-width-open: min(30rem, calc(100vw - 4rem));
+  }
+}
+
+/* Mobile: further reduce, keep in sync */
+@media (max-width: 480px) {
+  :root {
+    --nav-width-closed: 3rem !important;
+    --drawer-gap: 3rem !important; /* Synced */
+    --nav-width-open: calc(100vw - 3rem);
+  }
+}
+
+/* Home nav defaults (Closed) */
+body nav.drawer[data-nav="wrapper"] {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  left: auto !important;
+  z-index: 60 !important;
+  transform: none !important;
+  width: var(--nav-width-closed) !important;
+  max-width: var(--nav-width-open) !important;
+  transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1) !important;
+
+  /* NEW: Dynamic Island Base Styles */
+  background-color: var(--drawer-bg-closed) !important;
+  backdrop-filter: var(--drawer-blur) !important;
+  -webkit-backdrop-filter: var(--drawer-blur) !important;
+  padding: 0.25rem !important;
+  border-radius: var(--drawer-radius) !important;
+  border: none !important;
+}
+
+/* Home nav Open state */
+body nav.drawer[data-nav="wrapper"].is-nav-open {
+  width: var(--nav-width-open) !important;
+  box-shadow: 0 5px 15px 0 rgba(0,0,0,0.35), -25px 0 50px -12px rgba(0,0,0,0.25) !important;
+
+  /* NEW: Open State Styles */
+  background-color: var(--drawer-bg-open) !important;
+  padding: 0.75rem !important;
+}
+
+/* Nav Toggle Button Colors */
+.nav-toggle {
+  background-color: var(--nav-toggle-bg-closed) !important;
+  transition: background-color 0.3s ease !important;
+}
+
+body nav.drawer[data-nav="wrapper"].is-nav-open .nav-toggle {
+  background-color: var(--nav-toggle-bg-open) !important;
+}
+
+/* Peripheral takeover: Left-Gap Only Island */
+body.is-in-peripheral nav.drawer[data-nav="wrapper"] {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+
+  /* IMPORTANT CHANGE: rely on width instead of 'left' anchor */
+  left: auto !important;
+  width: calc(100vw - var(--drawer-gap)) !important;
+
+  height: auto !important;
+  max-width: none !important;
+  transform: translateX(0) !important;
+  transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  will-change: transform, top, left, right, bottom, width, height !important;
+
+  /* NEW: Peripheral Styles */
+  background-color: var(--drawer-bg-peripheral) !important;
+  opacity: 1 !important;
+  padding: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 5px 15px 0 rgba(0, 0, 0, 0.35), -25px 0 50px -12px rgba(0, 0, 0, 0.25) !important;
+  border-radius: var(--drawer-radius) !important;
+}
+
+body.is-in-peripheral nav.drawer[data-nav="wrapper"].is-drawer-open {
+  /* Logic handled by base state above for fixed positioning */
+}
+
+/* Barba containers: slide with the drawer */
+[data-barba="container"] { position: relative; z-index: 0; width: 100%; }
+
+/* Peripheral Container: Content sits inside the island area */
+body.is-in-peripheral [data-barba="container"] {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+
+  /* Match the drawer width logic */
+  left: var(--drawer-gap);
+  width: auto;
+
+  height: auto;
+  min-height: 0; /* Override min-height 100vh since it's constrained */
+  z-index: 61; /* Sit above the drawer (60) */
+  overflow-y: auto; /* Scroll inside the island */
+  overflow-x: hidden; /* Prevent horizontal scroll */
+  border-radius: var(--drawer-radius); /* Match drawer radius */
+
+  /* NEW: Clipping */
+  /* Ensure content clips to the border-radius */
+  clip-path: inset(0 round var(--drawer-radius));
+}
+
+/* Close trigger on the gap */
+[data-nav="close-project"] {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: var(--drawer-gap);
+  display: none;
+  pointer-events: none;
+  z-index: 20;
+}
+/* Show close trigger on peripheral pages as user requested */
+body.is-in-peripheral [data-nav="close-project"] {
+  display: flex !important;
+  pointer-events: auto !important;
+  cursor: pointer;
+}
+
+/* Nav links/visibility */
+[data-nav="links"] { display: none; }
+[data-nav="wrapper"].are-nav-links-visible [data-nav="links"] { display: flex; }
+[data-nav="link"].nav-link {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms ease, color 180ms ease;
+}
+[data-nav="wrapper"].is-nav-open [data-nav="link"].nav-link {
+  opacity: 1;
+  pointer-events: auto;
+}
+[data-nav-icon="close"], [data-nav-icon="open"] { transition: opacity 160ms ease; }
+[data-nav-icon="close"][hidden], [data-nav-icon="open"][hidden] { display: none; }
+
+/* 🎯 NEW: Dynamic centering for nav-toggle */
+.nav-container {
+  justify-content: left !important;
+}
+nav.drawer[data-nav="wrapper"].is-nav-open .nav-container {
+  justify-content: space-between !important; /* Space-between when open */
+}
+
+/* Work list hover/tap */
+.work-list-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1);
+  transform-origin: center;
+  border-radius: 0;
+  box-shadow: 0 0 0 0 #e2ed13;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-radius 0.12s ease;
+  will-change: transform;
+}
+.slide:has(.work-list-img-wrap:is(:hover, :focus-visible, :active)) .work-list-img,
+.slide:has(.work-title:is(:hover, :focus-visible, :active)) .work-list-img {
+  transform: scale(0.95);
+  box-shadow: 0 0 0 0.33rem #e2ed13;
+  border-radius: 8px;
+}
+
+/* List wrap */
+.home-content { min-height: 100vh; overflow: hidden; }
+.slider-wrapper, .slider-wrapper.loop-filler { list-style: none; margin: 0; padding: 0; }
+.slide-w { position: relative; will-change: transform, opacity, filter; transition: filter 0.3s; }
+.slide-blur { position: absolute; inset: 0; background: inherit; filter: blur(100px); opacity: 0; pointer-events: none; }
+
+/* ========================================
+   TRUE LOGO MORPH - Single SVG Solution
+   UPDATED: Fixed vertical shift and left padding
+   ======================================== */
+
+/* 1. Logo wrapper sizing */
+.logo-wrapper {
+  --logo-h-full: 22px;
+  --logo-h-icon: 18px;
+
+  height: var(--logo-h-full);
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start !important; /* FIXED: Prevent vertical centering shift */
+  transition: height 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Responsive heights */
+@media (max-width: 768px) {
+  .logo-wrapper {
+    --logo-h-full: 20px;
+    --logo-h-icon: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo-wrapper {
+    --logo-h-full: 18px;
+    --logo-h-icon: 14px;
+  }
+}
+
+/* 2. SVG container */
+.logo-wrapper .logo {
+  height: 100%;
+  width: auto;
+  display: block;
+  transition: margin-left 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.logo-wrapper .logo svg {
+  height: 100%;
+  width: auto;
+  display: block;
+  overflow: visible !important; /* Allow M to shift without clipping */
+}
+
+/* 3. All paths transition smoothly */
+.logo-wrapper .logo svg path {
+  transition: transform 600ms cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 400ms cubic-bezier(0.4, 0, 0.2, 1),
+              filter 400ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transform-origin: center;
+  will-change: transform, opacity, filter;
+}
+
+/* 4. ICON MODE: Hide all letters except D (path 1) and M (path 6) */
+/* Peripheral pages */
+body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(2),
+body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(3),
+body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(4),
+body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(5),
+body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(7),
+body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(8),
+body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(9),
+body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(10) {
+  opacity: 0 !important;
+  transform: scale(0.8) !important;
+  filter: blur(3px);
+}
+
+/* Nav open on homepage */
+body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(2),
+body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(3),
+body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(4),
+body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(5),
+body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(7),
+body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(8),
+body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(9),
+body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(10) {
+  opacity: 0 !important;
+  transform: scale(0.8) !important;
+  filter: blur(3px);
+}
+
+/* 5. ICON MODE: Shift M (path 6) to the left */
+/* M starts at x=115.8, should be at x=42, so shift -73.8px */
+body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(6) {
+  transform: translateX(-73.8px) !important;
+}
+
+body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(6) {
+  transform: translateX(-73.8px) !important;
+}
+
+/* 6. ICON MODE: Reduce left padding to fit in drawer gap */
+body.is-in-peripheral .logo-wrapper .logo,
+body.is-nav-logo-icon .logo-wrapper .logo {
+  margin-left: -10px !important; /* FIXED: Pull icon left to fit drawer gap */
+}
+
+/* 7. Adjust wrapper height in icon mode */
+body.is-in-peripheral .logo-wrapper,
+body.is-nav-logo-icon .logo-wrapper {
+  height: var(--logo-h-icon);
+}

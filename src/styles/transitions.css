@@ -137,6 +137,26 @@ body.is-in-peripheral [data-barba="container"] {
   z-index: var(--container-z); /* Sit above the drawer */
   overflow: hidden; /* Hard clip to drawer bounds */
   border-radius: var(--drawer-radius); /* Match drawer radius */
+
+  /* Soft fade on top/bottom edges */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 6%,
+    #000 94%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 6%,
+    #000 94%,
+    transparent 100%
+  );
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 body.is-in-peripheral [data-barba="container"] > .project-wrapper {

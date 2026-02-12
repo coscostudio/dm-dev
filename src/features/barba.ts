@@ -502,6 +502,8 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           if (nextFadeTarget) {
             void nextFadeTarget.offsetWidth;
             nextFadeTarget.style.transition = `opacity ${TRANSITION_DURATION}ms ${EASING}`;
+            // Ensure visibility is restored (in case CSS hid it)
+            nextFadeTarget.style.visibility = 'visible';
             nextFadeTarget.style.opacity = '1';
           }
           debugLog('home-to-peripheral:enter-end', getComputedSnapshot());

@@ -30,8 +30,8 @@
 /* Mobile: further reduce, keep in sync */
 @media (max-width: 480px) {
   :root {
-    --nav-width-closed: 3rem !important;
-    --drawer-gap: 3.5rem !important; /* Synced */
+    --nav-width-closed: 2.75rem !important;
+    --drawer-gap: 3.75rem !important; /* Synced */
     --nav-width-open: calc(100vw - 6rem);
   }
 }

@@ -20,7 +20,7 @@ const LOOP_SLIDER_CONFIG = {
   progressLerp: 0.12,
   minOpacity: 0.2,
   safeZoneBuffer: 48, // 3rem buffer outside the viewport
-  initialOffset: 0.2, // 20% of viewport height starting "scrolled up"
+  initialOffset: 0.125, // 12.5% of viewport height starting "scrolled up"
 };
 
 type SlideState = {

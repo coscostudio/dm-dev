@@ -56,7 +56,7 @@ const ensurePersistentShell = () => {
 
   const container = document.querySelector<HTMLElement>(BARBA_CONTAINER_SELECTOR);
 
-  let navShell =
+  const navShell =
     wrapper.querySelector<HTMLElement>(`${NAV_WRAPPER_SELECTOR}[${NAV_PERSIST_ATTR}]`) ||
     wrapper.querySelector<HTMLElement>(NAV_WRAPPER_SELECTOR) ||
     wrapper.querySelector<HTMLElement>(`${NAV_SELECTOR}[${NAV_PERSIST_ATTR}]`) ||
@@ -89,7 +89,7 @@ const ensurePersistentShell = () => {
   pruneShellNodes(wrapper);
   pruneShellNodes(container);
 
-  let close =
+  const close =
     wrapper.querySelector<HTMLElement>(`${CLOSE_SELECTOR}[${CLOSE_PERSIST_ATTR}]`) ||
     wrapper.querySelector<HTMLElement>(CLOSE_SELECTOR) ||
     container?.querySelector<HTMLElement>(CLOSE_SELECTOR) ||
@@ -434,8 +434,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           const currentNamespace = getNamespace(current?.container);
           const nextNamespace = getNamespace(next?.container);
           const nextHref =
-            next?.url?.href ??
-            (trigger instanceof Element ? trigger.getAttribute('href') : null);
+            next?.url?.href ?? (trigger instanceof Element ? trigger.getAttribute('href') : null);
           onBeforeLeave?.({
             currentNamespace,
             nextNamespace,
@@ -513,8 +512,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           const currentNamespace = getNamespace(current?.container);
           const nextNamespace = getNamespace(next?.container);
           const nextHref =
-            next?.url?.href ??
-            (trigger instanceof Element ? trigger.getAttribute('href') : null);
+            next?.url?.href ?? (trigger instanceof Element ? trigger.getAttribute('href') : null);
           onBeforeLeave?.({
             currentNamespace,
             nextNamespace,

@@ -12,9 +12,9 @@ const LOOP_SLIDER_SELECTORS = {
 } as const satisfies Record<string, readonly string[]>;
 
 const LOOP_SLIDER_CONFIG = {
-  baseScale: 0.8,
+  baseScale: 0.7,
   focusScale: 1,
-  blurMax: 80,
+  blurMax: 60,
   translateMax: 0,
   lerp: 0.08,
   progressLerp: 0.12,
@@ -392,17 +392,24 @@ class LoopSliderInstance {
     this.slides.forEach((slide) => {
       const rect = slide.node.getBoundingClientRect();
       const itemHeight = rect.height;
-      const itemCenter = rect.top + itemHeight / 2;
 
-      // Distance over which the transition happens
-      const falloffDistance = itemHeight + buffer;
+      // Define the distance over which the item fades out
+      const transitionDistance = itemHeight;
 
-      // Progress relative to top exit (0 when rect.bottom is at -buffer, 1 when rect.top is at 0)
-      const progressTop = clamp((itemCenter + (itemHeight / 2 + buffer)) / falloffDistance, 0, 1);
+      // Progress relative to top exit
+      // Stay at 1 while rect.top >= -buffer
+      // Linearly fade to 0 as rect.top goes from -buffer to (-buffer - transitionDistance)
+      const progressTop = clamp(
+        (rect.top + buffer + transitionDistance) / transitionDistance,
+        0,
+        1
+      );
 
-      // Progress relative to bottom exit (0 when rect.top is at VH + buffer, 1 when rect.bottom is at VH)
+      // Progress relative to bottom exit
+      // Stay at 1 while rect.bottom <= viewportHeight + buffer
+      // Linearly fade to 0 as rect.bottom goes from (viewportHeight + buffer) to (viewportHeight + buffer + transitionDistance)
       const progressBottom = clamp(
-        (viewportHeight + (itemHeight / 2 + buffer) - itemCenter) / falloffDistance,
+        (viewportHeight + buffer + transitionDistance - rect.bottom) / transitionDistance,
         0,
         1
       );
@@ -534,7 +541,6 @@ export const initLoopSlider = () => {
       try {
         return new LoopSliderInstance(root);
       } catch (error) {
-        console.warn(error);
         return null;
       }
     })

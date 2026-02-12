@@ -21,8 +21,8 @@
 /* Tablet: reduce both values in sync */
 @media (max-width: 768px) {
   :root {
-    --nav-width-closed: 3rem !important;
-    --drawer-gap: 4rem !important; /* Synced */
+    --nav-width-closed: 2.75rem !important;
+    --drawer-gap: 4.5rem !important; /* Synced */
     --nav-width-open: min(30rem, calc(100vw - 8rem));
   }
 }
@@ -196,11 +196,12 @@ body.is-in-peripheral [data-nav="toggle"] {
 [data-nav="link"].nav-link {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 250ms ease, color 180ms ease;
+  transition: opacity 250ms ease, color 250ms ease;
 }
 .drawer.is-nav-open [data-nav="link"].nav-link {
   opacity: 1;
   pointer-events: auto;
+  transition-delay: 220ms;
 }
 [data-nav-icon="close"], [data-nav-icon="open"] { transition: opacity 160ms ease; }
 [data-nav-icon="close"][hidden], [data-nav-icon="open"][hidden] { display: none; }

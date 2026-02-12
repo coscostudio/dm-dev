@@ -35,8 +35,12 @@ const CLOSE_PERSIST_ATTR = 'data-close-persistent';
 const PERIPHERAL_BODY_CLASS = 'is-in-peripheral';
 const TRANSITIONING_PERIPHERAL_CLASS = 'is-transitioning-peripheral';
 const TRANSITION_DURATION = 700;
+const CONTENT_FADE_DURATION = 320;
+const DRAWER_SHRINK_DELAY = 0;
 const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const DEBUG_TRANSITIONS = false;
+let peripheralToHomeGate: Promise<void> | null = null;
+let peripheralToHomeCleanup: Promise<void> | null = null;
 
 const LOOP_SLIDER_SNAP_ATTR = 'data-loop-slider-snap';
 
@@ -127,58 +131,30 @@ const setHorizontalOverflowLock = (lock: boolean) => {
   }
 };
 
-const waitForOpacityTransition = (element: HTMLElement, duration: number) =>
-  new Promise<void>((resolve) => {
-    let settled = false;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      element.removeEventListener('transitionend', onEnd);
-      resolve();
-    };
-    const onEnd = (event: TransitionEvent) => {
-      if (event.propertyName === 'opacity') {
-        done();
-      }
-    };
-    element.addEventListener('transitionend', onEnd);
-    window.setTimeout(done, duration + 50);
-  });
-
-const getTransitionDurationMs = (element: HTMLElement) => {
-  const duration = getComputedStyle(element).transitionDuration;
-  const parts = duration.split(',').map((part) => part.trim());
-  const first = parts[0] ?? '0s';
-  if (first.endsWith('ms')) {
-    return Number.parseFloat(first);
-  }
-  if (first.endsWith('s')) {
-    return Number.parseFloat(first) * 1000;
-  }
-  return 0;
-};
-
-const fadeOutElement = async (element: HTMLElement) => {
+const fadeOutElement = async (element: HTMLElement, duration = CONTENT_FADE_DURATION) => {
   element.style.display = element.style.display || '';
   element.style.visibility = 'visible';
-  element.style.transition = `opacity ${TRANSITION_DURATION}ms ${EASING}`;
   element.style.opacity = '1';
-  void element.offsetWidth;
-  await new Promise<void>((resolve) => {
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        element.style.opacity = '0';
-        resolve();
-      });
-    });
-  });
 
-  const computedDuration = getTransitionDurationMs(element);
-  if (computedDuration <= 0) {
-    return;
+  if (typeof element.animate === 'function') {
+    const animation = element.animate([{ opacity: 1 }, { opacity: 0 }], {
+      duration,
+      easing: EASING,
+      fill: 'forwards',
+    });
+    try {
+      await animation.finished;
+    } catch {
+      animation.cancel();
+      element.style.opacity = '0';
+    }
+  } else {
+    element.style.transition = `opacity ${duration}ms ${EASING}`;
+    void element.offsetWidth;
+    element.style.opacity = '0';
+    await new Promise((resolve) => window.setTimeout(resolve, duration));
   }
 
-  await waitForOpacityTransition(element, computedDuration);
   element.style.visibility = 'hidden';
   element.style.pointerEvents = 'none';
 };
@@ -474,7 +450,7 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           const currentFadeTarget = getFadeTarget(currentContainer);
           if (currentFadeTarget) {
             // Fade out current content
-            await fadeOutElement(currentFadeTarget);
+            await fadeOutElement(currentFadeTarget, CONTENT_FADE_DURATION);
           }
           stopObserver();
         },
@@ -525,6 +501,12 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           // prepare container styles if necessary, but CSS usually handles it.
           // Home container usually doesn't need special prep if CSS is correct.
           setCloseTriggerVisible(false);
+          const nextFadeTarget = getFadeTarget(nextContainer);
+          if (nextFadeTarget) {
+            nextFadeTarget.style.opacity = '0';
+            nextFadeTarget.style.visibility = 'hidden';
+            nextFadeTarget.style.pointerEvents = 'none';
+          }
         },
         leave: async ({ current, next, trigger }: any) => {
           const stopObserver = startTransitionDebugObserver();
@@ -541,22 +523,36 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
           });
           const currentContainer = current.container as HTMLElement | null;
           const currentFadeTarget = getFadeTarget(currentContainer);
-          if (currentFadeTarget) {
+          peripheralToHomeGate = (async () => {
+            if (currentFadeTarget) {
+              await fadeOutElement(currentFadeTarget, CONTENT_FADE_DURATION);
+            }
+
             document.body.classList.add(TRANSITIONING_PERIPHERAL_CLASS);
-            await fadeOutElement(currentFadeTarget);
-          }
+            forceCloseNav();
+            window.scrollTo(0, 0);
 
-          forceCloseNav();
+            if (!currentFadeTarget) {
+              await new Promise((r) => setTimeout(r, TRANSITION_DURATION));
+            }
 
-          window.scrollTo(0, 0);
+            if (DRAWER_SHRINK_DELAY > 0) {
+              await new Promise((resolve) => window.setTimeout(resolve, DRAWER_SHRINK_DELAY));
+            }
 
-          if (!currentFadeTarget) {
-            await new Promise((r) => setTimeout(r, TRANSITION_DURATION));
-          }
+            // Trigger shrink back to home after content fades out
+            document.body.classList.remove(PERIPHERAL_BODY_CLASS);
+            document.body.classList.remove(TRANSITIONING_PERIPHERAL_CLASS);
+          })();
 
-          // Trigger shrink back to home after content fades out
-          document.body.classList.remove(PERIPHERAL_BODY_CLASS);
-          document.body.classList.remove(TRANSITIONING_PERIPHERAL_CLASS);
+          peripheralToHomeCleanup = (async () => {
+            if (peripheralToHomeGate) {
+              await peripheralToHomeGate;
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, TRANSITION_DURATION));
+          })();
+
+          await peripheralToHomeGate;
           stopObserver();
         },
         enter: async ({ next }: any) => {
@@ -569,8 +565,16 @@ export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {
             nextContainer.style.opacity = '1';
           }
           if (nextFadeTarget) {
-            nextFadeTarget.style.transition = `opacity ${TRANSITION_DURATION}ms ${EASING}`;
+            if (peripheralToHomeGate) {
+              await peripheralToHomeGate;
+            }
+            nextFadeTarget.style.visibility = 'visible';
+            nextFadeTarget.style.pointerEvents = '';
+            nextFadeTarget.style.transition = `opacity ${CONTENT_FADE_DURATION}ms ${EASING}`;
             nextFadeTarget.style.opacity = '1';
+            if (peripheralToHomeCleanup) {
+              await peripheralToHomeCleanup;
+            }
           }
         },
       },

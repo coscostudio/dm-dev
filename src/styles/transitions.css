@@ -240,8 +240,8 @@ body:not(.is-in-peripheral) .drawer.is-nav-open .nav-container {
 
 /* 1. Logo wrapper sizing */
 .logo-wrapper {
-  --logo-h-full: 20px;
-  --logo-h-icon: 17px;
+  --logo-h-full: 19px;
+  --logo-h-icon: 16px;
 
   height: var(--logo-h-full);
   position: relative;
@@ -253,14 +253,14 @@ body:not(.is-in-peripheral) .drawer.is-nav-open .nav-container {
 /* Responsive heights */
 @media (max-width: 768px) {
   .logo-wrapper {
-    --logo-h-full: 18px;
-    --logo-h-icon: 15px;
+    --logo-h-full: 17px;
+    --logo-h-icon: 14.5px;
   }
 }
 
 @media (max-width: 480px) {
   .logo-wrapper {
-    --logo-h-full: 16px;
+    --logo-h-full: 15px;
     --logo-h-icon: 13px;
   }
 }

@@ -405,6 +405,25 @@ const syncInitialState = () => {
   document.body.classList.toggle(PERIPHERAL_BODY_CLASS, isPeripheral);
   setCloseTriggerVisible(isPeripheral);
   setHorizontalOverflowLock(!isPeripheral);
+
+  // If initial load lies on a peripheral page, we might want to animate the entrance
+  // to avoid FOUC if the user has hidden it via CSS.
+  if (isPeripheral && container) {
+    const fadeTarget = getFadeTarget(container);
+    if (fadeTarget) {
+      // Ensure it starts hidden (matches user's CSS)
+      fadeTarget.style.opacity = '0';
+      fadeTarget.style.visibility = 'hidden';
+
+      // Wait for the drawer expansion (simulated effectively by just waiting)
+      // The body class 'is-in-peripheral' added above triggers the drawer transition.
+      setTimeout(() => {
+        fadeTarget.style.visibility = 'visible';
+        fadeTarget.style.transition = `opacity ${CONTENT_FADE_DURATION}ms ${EASING}`;
+        fadeTarget.style.opacity = '1';
+      }, TRANSITION_DURATION);
+    }
+  }
 };
 
 export const initBarba = ({ onAfterEnter, onBeforeLeave }: BarbaCallbacks) => {

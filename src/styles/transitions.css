@@ -14,7 +14,7 @@
   --drawer-bg-peripheral: #4A4A4A;
   --nav-toggle-bg-closed: #696969;
   --nav-toggle-bg-open: #4A4A4A;
-  --drawer-blur: blur(25px);
+  --drawer-blur: blur(16px);
   --drawer-radius: 24px;
 }
 

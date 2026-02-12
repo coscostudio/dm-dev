@@ -127,6 +127,10 @@ class LoopSliderInstance {
     this.trackElement = track;
     this.prepareLoopLists(track);
 
+    // Hide list initially to prevent jump
+    this.primaryList.style.opacity = '0';
+    this.primaryList.style.transition = 'opacity 0.4s ease-out';
+
     if (this.prefersInfinite) {
       this.initLocalLenis();
     }
@@ -150,10 +154,22 @@ class LoopSliderInstance {
 
   public applyInitialOffset() {
     if (!this.localLenis) return;
-    const offset = this.viewportHeight * this.config.initialOffset;
-    if (offset > 0) {
-      this.localLenis.scrollTo(offset, { immediate: true });
-    }
+
+    // Ensure we're in a fresh frame to avoid race conditions with layout
+    requestAnimationFrame(() => {
+      const offset = this.viewportHeight * this.config.initialOffset;
+      if (offset > 0 && this.localLenis) {
+        // Scroll backwards (negative) to shift content down
+        this.localLenis.scrollTo(-offset, { immediate: true });
+      }
+
+      // Reveal the list in the next frame after scroll is applied
+      requestAnimationFrame(() => {
+        if (this.primaryList) {
+          this.primaryList.style.opacity = '1';
+        }
+      });
+    });
   }
 
   private initLocalLenis() {
@@ -490,6 +506,11 @@ export const destroyLoopSlider = () => {
 
 export const initLoopSlider = () => {
   const shouldSnap = document.body.hasAttribute(LOOP_SLIDER_SNAP_ATTR);
+  // Prevent browser scroll restoration from interfering with our custom offset
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+
   const sliderRoots = getLoopSliderRoots();
 
   if (!sliderRoots.length) {

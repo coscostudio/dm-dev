@@ -98,8 +98,9 @@ body.is-in-peripheral .drawer {
   width: calc(100vw - var(--drawer-gap)) !important;
   height: 100% !important;
   transform: translateX(0) !important;
-  transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1) !important;
-
+  /* IMPORTANT: Removing transition on width/height/transform when STABLE to allow instant resize */
+  transition: background-color 0.3s, opacity 0.3s, box-shadow 0.3s !important;
+  
   /* NEW: Peripheral Styles */
   background-color: var(--drawer-bg-peripheral) !important;
   opacity: 1 !important;
@@ -108,6 +109,11 @@ body.is-in-peripheral .drawer {
   -webkit-backdrop-filter: none !important;
   box-shadow: 0 5px 15px 0 rgba(0, 0, 0, 0.35), -25px 0 50px -12px rgba(0, 0, 0, 0.25) !important;
   border-radius: var(--drawer-radius) !important;
+}
+
+/* Re-enable full transition during actual navigation */
+body.is-transitioning-peripheral .drawer {
+  transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 /* Barba containers: keep home content under the drawer, isolate stacking */

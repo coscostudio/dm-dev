@@ -411,6 +411,9 @@ const syncInitialState = () => {
   if (isPeripheral && container) {
     const fadeTarget = getFadeTarget(container);
     if (fadeTarget) {
+      // Trigger the 'Dynamic Island' expansion via CSS class
+      document.body.classList.add(TRANSITIONING_PERIPHERAL_CLASS);
+
       // Ensure it starts hidden (matches user's CSS)
       fadeTarget.style.opacity = '0';
       fadeTarget.style.visibility = 'hidden';
@@ -418,6 +421,7 @@ const syncInitialState = () => {
       // Wait for the drawer expansion (simulated effectively by just waiting)
       // The body class 'is-in-peripheral' added above triggers the drawer transition.
       setTimeout(() => {
+        document.body.classList.remove(TRANSITIONING_PERIPHERAL_CLASS);
         fadeTarget.style.visibility = 'visible';
         fadeTarget.style.transition = `opacity ${CONTENT_FADE_DURATION}ms ${EASING}`;
         fadeTarget.style.opacity = '1';

@@ -18,7 +18,7 @@ const LOOP_SLIDER_CONFIG = {
   translateMax: 0,
   lerp: 0.08,
   progressLerp: 0.12,
-  minOpacity: 0.2,
+  minOpacity: 0,
   safeZoneBuffer: 48, // 3rem buffer outside the viewport
   initialOffset: 0.125, // 12.5% of viewport height starting "scrolled up"
 };

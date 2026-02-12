@@ -19,6 +19,7 @@ const LOOP_SLIDER_CONFIG = {
   lerp: 0.08,
   progressLerp: 0.12,
   minOpacity: 0.2,
+  safeZoneBuffer: 48, // 3rem buffer outside the viewport
 };
 
 type SlideState = {
@@ -185,11 +186,15 @@ class LoopSliderInstance {
 
     this.slides = nodes.map((node) => ({
       node,
-      contentNode: queryElementWithFallback<HTMLElement>(node, LOOP_SLIDER_SELECTORS.content) ?? node,
+      contentNode:
+        queryElementWithFallback<HTMLElement>(node, LOOP_SLIDER_SELECTORS.content) ?? node,
       blurNode: queryElementWithFallback<HTMLElement>(node, LOOP_SLIDER_SELECTORS.blur),
       focusNodes: (() => {
         const focusTargets: HTMLElement[] = [];
-        const primaryFocus = queryElementWithFallback<HTMLElement>(node, LOOP_SLIDER_SELECTORS.media);
+        const primaryFocus = queryElementWithFallback<HTMLElement>(
+          node,
+          LOOP_SLIDER_SELECTORS.media
+        );
         const titleNode = node.querySelector<HTMLElement>('.work-title');
         if (primaryFocus) {
           focusTargets.push(primaryFocus);
@@ -356,18 +361,29 @@ class LoopSliderInstance {
     this.viewportHeight = viewportHeight;
     this.computeLoopHeight();
     this.applyLoopOffset();
-    const viewportTop = 0;
-    const viewportBottom = viewportHeight;
+
+    const buffer = this.config.safeZoneBuffer;
 
     this.slides.forEach((slide) => {
       const rect = slide.node.getBoundingClientRect();
-      const cardTop = rect.top;
-      const cardBottom = rect.bottom;
-      const cardHeight = Math.max(rect.height, 1);
-      const visibleTop = Math.max(viewportTop, cardTop);
-      const visibleBottom = Math.min(viewportBottom, cardBottom);
-      const visibleHeight = Math.max(0, visibleBottom - visibleTop);
-      const visibility = clamp(visibleHeight / cardHeight, 0, 1);
+      const itemHeight = rect.height;
+      const itemCenter = rect.top + itemHeight / 2;
+
+      // Distance over which the transition happens
+      const falloffDistance = itemHeight + buffer;
+
+      // Progress relative to top exit (0 when rect.bottom is at -buffer, 1 when rect.top is at 0)
+      const progressTop = clamp((itemCenter + (itemHeight / 2 + buffer)) / falloffDistance, 0, 1);
+
+      // Progress relative to bottom exit (0 when rect.top is at VH + buffer, 1 when rect.bottom is at VH)
+      const progressBottom = clamp(
+        (viewportHeight + (itemHeight / 2 + buffer) - itemCenter) / falloffDistance,
+        0,
+        1
+      );
+
+      // Take the minimum and apply a power curve to favor the unblurred state
+      const visibility = Math.pow(Math.min(progressTop, progressBottom), 0.8);
 
       slide.targetProgress = visibility;
       slide.targetScale =

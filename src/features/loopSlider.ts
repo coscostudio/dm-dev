@@ -20,6 +20,7 @@ const LOOP_SLIDER_CONFIG = {
   progressLerp: 0.12,
   minOpacity: 0.2,
   safeZoneBuffer: 48, // 3rem buffer outside the viewport
+  initialOffset: 0.2, // 20% of viewport height starting "scrolled up"
 };
 
 type SlideState = {
@@ -145,6 +146,14 @@ class LoopSliderInstance {
 
     this.localLenis?.destroy();
     this.localLenis = null;
+  }
+
+  public applyInitialOffset() {
+    if (!this.localLenis) return;
+    const offset = this.viewportHeight * this.config.initialOffset;
+    if (offset > 0) {
+      this.localLenis.scrollTo(offset, { immediate: true });
+    }
   }
 
   private initLocalLenis() {
@@ -524,5 +533,9 @@ export const initLoopSlider = () => {
     instances.forEach((instance) => instance.syncToTargets());
     document.body.removeAttribute(LOOP_SLIDER_SNAP_ATTR);
   }
+
+  // Apply initial offset after measure ensures everyone is ready
+  instances.forEach((instance) => instance.applyInitialOffset());
+
   startSliderAnimationLoop();
 };

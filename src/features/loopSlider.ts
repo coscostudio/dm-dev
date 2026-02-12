@@ -19,7 +19,7 @@ const LOOP_SLIDER_CONFIG = {
   lerp: 0.08,
   progressLerp: 0.12,
   minOpacity: 0,
-  safeZoneBuffer: 48, // 3rem buffer outside the viewport
+  safeZoneBuffer: 32, // 3rem buffer outside the viewport
   initialOffset: 0.125, // 12.5% of viewport height starting "scrolled up"
 };
 
@@ -256,6 +256,9 @@ class LoopSliderInstance {
     slide.contentNode.style.opacity = opacity.toFixed(3);
 
     slide.focusNodes.forEach((target) => {
+      // Use individual visibility if available, fallback to slide progress (for safety)
+      const visibility = (target as any)._currentVisibility ?? slide.progress;
+      const blurValue = (1 - visibility) * this.config.blurMax;
       target.style.filter = `blur(${blurValue.toFixed(2)}px)`;
     });
 
@@ -391,35 +394,70 @@ class LoopSliderInstance {
 
     this.slides.forEach((slide) => {
       const rect = slide.node.getBoundingClientRect();
-      const itemHeight = rect.height;
+      // We will now calculate visibility for EACH focus node individually
+      // This ensures that a tall slide container doesn't trigger blur on a small child
+      // The slide.progress and slide.scale will be based on the "most visible" element (or average?)
+      // Actually, let's keep slide.targetScale based on the container (or the image?), but apply BLUR individually.
 
-      // Define the distance over which the item fades out
-      const transitionDistance = itemHeight;
+      // Let's refine: The slide SCALE should probably still be uniform for the whole slide to keep it cohesive.
+      // But the BLUR should be independent.
 
-      // Progress relative to top exit
-      // Stay at 1 while rect.top >= -buffer
-      // Linearly fade to 0 as rect.top goes from -buffer to (-buffer - transitionDistance)
-      const progressTop = clamp(
-        (rect.top + buffer + transitionDistance) / transitionDistance,
+      // 1. Calculate overall slide visibility for SCALE (using the main content or image)
+      // We'll use the image (primary focus) if available, otherwise the whole slide.
+      const scaleTarget = slide.focusNodes[0] || slide.node;
+      const scaleRect = scaleTarget.getBoundingClientRect();
+      const scaleHeight = scaleRect.height;
+
+      const scaleTransitionDistance = scaleHeight;
+      const scaleProgressTop = clamp(
+        (scaleRect.top + buffer + scaleTransitionDistance) / scaleTransitionDistance,
         0,
         1
       );
-
-      // Progress relative to bottom exit
-      // Stay at 1 while rect.bottom <= viewportHeight + buffer
-      // Linearly fade to 0 as rect.bottom goes from (viewportHeight + buffer) to (viewportHeight + buffer + transitionDistance)
-      const progressBottom = clamp(
-        (viewportHeight + buffer + transitionDistance - rect.bottom) / transitionDistance,
+      const scaleProgressBottom = clamp(
+        (viewportHeight + buffer + scaleTransitionDistance - scaleRect.bottom) /
+          scaleTransitionDistance,
         0,
         1
       );
+      const scaleVisibility = Math.pow(Math.min(scaleProgressTop, scaleProgressBottom), 0.8);
 
-      // Take the minimum and apply a power curve to favor the unblurred state
-      const visibility = Math.pow(Math.min(progressTop, progressBottom), 0.8);
-
-      slide.targetProgress = visibility;
+      slide.targetProgress = scaleVisibility;
       slide.targetScale =
-        this.config.baseScale + (this.config.focusScale - this.config.baseScale) * visibility;
+        this.config.baseScale + (this.config.focusScale - this.config.baseScale) * scaleVisibility;
+
+      // 2. We don't apply blur here anymore on the slide object state.
+      // Instead, we will store the individual visibility needs, OR we just apply it directly in animate()?
+      // The current architecture calculates state in measure() and applies in animate().
+      // To support independent blur, we need to store it.
+      // Let's monkey-patch valid properties onto the elements or generic 'metadata' if we want to be clean,
+      // but for now, let's just calculation it in animate() or store a map?
+      // Actually, ‘measure’ is called constantly on scroll. ‘animate’ works on interpolated values.
+      // If we want smooth blur, we need to interpolate the blur value too.
+      // The current `slide` state only has ONE progress value.
+      // We need to extend SlideState or just allow the children to be handled.
+
+      // OPTION: We'll attach a custom property to the DOM node for 'targetBlur' and 'currentBlur'?
+      // Or just map it on the slide.focusNodes?
+      slide.focusNodes.forEach((node) => {
+        const nodeRect = node.getBoundingClientRect();
+        const nodeHeight = nodeRect.height;
+        const nodeDist = nodeHeight; // transition over own height
+
+        const pTop = clamp((nodeRect.top + buffer + nodeDist) / nodeDist, 0, 1);
+        const pBottom = clamp(
+          (viewportHeight + buffer + nodeDist - nodeRect.bottom) / nodeDist,
+          0,
+          1
+        );
+        const nodeVis = Math.pow(Math.min(pTop, pBottom), 0.8);
+
+        // Store target visibility on the element itself to retrieve in animate()
+        (node as any)._targetVisibility = nodeVis;
+        if (typeof (node as any)._currentVisibility === 'undefined') {
+          (node as any)._currentVisibility = nodeVis;
+        }
+      });
     });
   }
 
@@ -431,6 +469,15 @@ class LoopSliderInstance {
     this.slides.forEach((slide) => {
       slide.scale += (slide.targetScale - slide.scale) * this.config.lerp;
       slide.progress += (slide.targetProgress - slide.progress) * this.config.progressLerp;
+
+      // Interpolate individual focus nodes
+      slide.focusNodes.forEach((node) => {
+        const target = (node as any)._targetVisibility ?? 0;
+        const current = (node as any)._currentVisibility ?? 0;
+        const next = current + (target - current) * this.config.progressLerp;
+        (node as any)._currentVisibility = next;
+      });
+
       this.applySlideStyles(slide);
     });
   }

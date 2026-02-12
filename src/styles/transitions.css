@@ -23,7 +23,7 @@
   :root {
     --nav-width-closed: 3rem !important;
     --drawer-gap: 4rem !important; /* Synced */
-    --nav-width-open: min(30rem, calc(100vw - 4rem));
+    --nav-width-open: min(30rem, calc(100vw - 8rem));
   }
 }
 
@@ -31,8 +31,8 @@
 @media (max-width: 480px) {
   :root {
     --nav-width-closed: 3rem !important;
-    --drawer-gap: 3rem !important; /* Synced */
-    --nav-width-open: calc(100vw - 3rem);
+    --drawer-gap: 3.5rem !important; /* Synced */
+    --nav-width-open: calc(100vw - 6rem);
   }
 }
 
@@ -110,10 +110,6 @@ body.is-in-peripheral .drawer {
   border-radius: var(--drawer-radius) !important;
 }
 
-body.is-in-peripheral .drawer.is-drawer-open {
-  /* Logic handled by base state above for fixed positioning */
-}
-
 /* Barba containers: keep home content under the drawer, isolate stacking */
 body:not(.is-in-peripheral) [data-barba="container"] {
   position: relative;
@@ -137,26 +133,6 @@ body.is-in-peripheral [data-barba="container"] {
   z-index: var(--container-z); /* Sit above the drawer */
   overflow: hidden; /* Hard clip to drawer bounds */
   border-radius: var(--drawer-radius); /* Match drawer radius */
-
-  /* Soft fade on top/bottom edges */
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    #000 6%,
-    #000 94%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    #000 6%,
-    #000 94%,
-    transparent 100%
-  );
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
 }
 
 body.is-in-peripheral [data-barba="container"] > .project-wrapper {
@@ -196,7 +172,7 @@ body.is-transitioning-peripheral [data-barba="container"].is-leaving {
   pointer-events: none;
   z-index: 20;
 }
-/* Show close trigger on peripheral pages as user requested */
+/* Show close trigger on peripheral pages */
 body.is-in-peripheral [data-nav="close-project"] {
   display: flex !important;
   pointer-events: auto !important;
@@ -264,8 +240,8 @@ body:not(.is-in-peripheral) .drawer.is-nav-open .nav-container {
 
 /* 1. Logo wrapper sizing */
 .logo-wrapper {
-  --logo-h-full: 22px;
-  --logo-h-icon: 18px;
+  --logo-h-full: 20px;
+  --logo-h-icon: 17px;
 
   height: var(--logo-h-full);
   position: relative;
@@ -277,15 +253,15 @@ body:not(.is-in-peripheral) .drawer.is-nav-open .nav-container {
 /* Responsive heights */
 @media (max-width: 768px) {
   .logo-wrapper {
-    --logo-h-full: 20px;
-    --logo-h-icon: 16px;
+    --logo-h-full: 18px;
+    --logo-h-icon: 15px;
   }
 }
 
 @media (max-width: 480px) {
   .logo-wrapper {
-    --logo-h-full: 18px;
-    --logo-h-icon: 14px;
+    --logo-h-full: 16px;
+    --logo-h-icon: 13px;
   }
 }
 
@@ -350,12 +326,6 @@ body.is-in-peripheral .logo-wrapper .logo svg path:nth-child(6) {
 
 body.is-nav-logo-icon .logo-wrapper .logo svg path:nth-child(6) {
   transform: translateX(-73.8px) !important;
-}
-
-/* 6. ICON MODE: Reduce left padding to fit in drawer gap */
-body.is-in-peripheral .logo-wrapper .logo,
-body.is-nav-logo-icon .logo-wrapper .logo {
-  margin-left: -10px !important; /* FIXED: Pull icon left to fit drawer gap */
 }
 
 /* 7. Adjust wrapper height in icon mode */
